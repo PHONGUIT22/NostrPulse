@@ -66,7 +66,7 @@ Built for the **BOSS Battle Hackathon** (Track: *Freedom Stack*).
 
 ```bash
 # 1. Clone the repository
-git clone [https://github.com/PHONGUIT22/NostrPulse.git](https://github.com/PHONGUIT22/NostrPulse.git)
+git clone (https://github.com/PHONGUIT22/NostrPulse.git)
 cd NostrPulse
 
 # 2. Install dependencies
