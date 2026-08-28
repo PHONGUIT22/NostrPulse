@@ -14,9 +14,9 @@ export const metadata: Metadata = {
   },
   description: "Explore top zapped Nostr creators, verify NIP-05 profiles, check WebSocket relays, and analyze Bitcoin Lightning Value-4-Value payments.",
   icons: {
-    icon: "/icon.webp",
-    shortcut: "/icon.webp",
-    apple: "/icon.webp",
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
   },
   authors: [{ name: "Nguyễn Hạc Phong", url: "https://nostrpulse.com/about" }],
   openGraph: {
