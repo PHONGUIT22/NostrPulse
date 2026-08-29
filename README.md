@@ -7,7 +7,7 @@
 [![Track](https://img.shields.io/badge/Track_2-Freedom_Stack-F7931A?style=for-the-badge&logo=bitcoin&logoColor=white)](https://bitshala.org)
 [![Nostr Protocol](https://img.shields.io/badge/Nostr-NIPs_Compliant-8A2BE2?style=for-the-badge&logo=nostr)](https://github.com/nostr-protocol/nips)
 [![Cashu Protocol](https://img.shields.io/badge/Cashu-NUTs_V4_eCash-00D084?style=for-the-badge)](https://cashu.space)
-[![Next.js 16](https://img.shields.io/badge/Next.js_15-App_Router-000000?style=for-the-badge&logo=next.js)](https://nextjs.org/)
+[![Next.js 16](https://img.shields.io/badge/Next.js_16-App_Router-000000?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 
 <br />
 
@@ -192,7 +192,7 @@ User selects Sats ──► Request NUT-04 Quote ──► Settle via WebLN/QR �
 
 ## 🛠️ Technology Stack & Architecture
 
-* **Core Framework:** Next.js 15 (App Router, Server Components & Streaming SSR)
+* **Core Framework:** Next.js 16 (App Router, Server Components & Streaming SSR)
 * **Language:** TypeScript (Strict type-checking on all cryptographic structures)
 * **Styling:** Tailwind CSS v4, Base UI, Lucide Icons
 * **Protocol Libraries:** `nostr-tools` (v2.x), `@cashu/cashu-ts` (v4.x), `@noble/hashes`
