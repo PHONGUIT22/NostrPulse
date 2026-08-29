@@ -16,10 +16,10 @@
 </p>
 
 <p align="center">
-  <a href="https://nostrpulse.com"><b>Explore Live Explorer »</b></a> •
-  <a href="https://nostrpulse.com/about"><b>Methodology</b></a> •
-  <a href="https://nostrpulse.com/relays"><b>Relay Telemetry</b></a> •
-  <a href="https://nostrpulse.com/compare"><b>Versus Engine</b></a>
+  <a href="https://nostrpulse.vercel.app/"><b>Explore Live Explorer »</b></a> •
+  <a href="https://nostrpulse.vercel.app//about"><b>Methodology</b></a> •
+  <a href="https://nostrpulse.vercel.app//relays"><b>Relay Telemetry</b></a> •
+  <a href="https://nostrpulse.vercel.app//compare"><b>Versus Engine</b></a>
 </p>
 
 </div>
