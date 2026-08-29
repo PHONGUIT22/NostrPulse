@@ -3,7 +3,7 @@ import { nip19 } from "nostr-tools";
 import { SimplePool } from "nostr-tools/pool";
 import { FEATURED_CREATORS } from "@/lib/creators";
 
-// 6 Public Relays lớn nhất thế giới kết nối trực tiếp
+// 6 Public Relays lớn nhất thế giới kết nối dự phòng
 export const DEFAULT_RELAYS = [
   "wss://relay.damus.io",
   "wss://nos.lol",
@@ -29,9 +29,42 @@ export interface NostrProfile {
   relays_connected?: number;
 }
 
+export interface NostrNote {
+  id: string;
+  pubkey: string;
+  content: string;
+  created_at: number;
+  tags: string[][];
+}
+
+/**
+ * Chuẩn hóa URL Relay (loại bỏ dấu gạch chéo thừa, thêm wss:// nếu thiếu)
+ */
+export function normalizeRelayUrl(url: string): string {
+  let clean = url.trim().replace(/\/+$/, "");
+  if (!clean.startsWith("wss://") && !clean.startsWith("ws://")) {
+    clean = "wss://" + clean;
+  }
+  return clean;
+}
+
+/**
+ * Gộp và lọc trùng lặp danh sách Relay (Deduplicate & Sanitize)
+ */
+export function mergeRelays(primary: string[] = [], fallback: string[] = DEFAULT_RELAYS): string[] {
+  const set = new Set<string>();
+  [...primary, ...fallback].forEach((r) => {
+    if (r && typeof r === "string") {
+      try {
+        set.add(normalizeRelayUrl(r));
+      } catch {}
+    }
+  });
+  return Array.from(set);
+}
+
 /**
  * Hàm chuyển đổi Uint8Array sang chuỗi Hex thuần túy
- * Chạy an toàn 100% trên cả Browser lẫn Server SSR (Không phụ thuộc vào Node.js Buffer)
  */
 export function bytesToHex(bytes: Uint8Array | number[]): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -39,9 +72,6 @@ export function bytesToHex(bytes: Uint8Array | number[]): string {
 
 /**
  * 1. Chuyển đổi an toàn giữa npub, nprofile và Hex Pubkey 64 ký tự (Zero-Crash)
- */
-/**
- * 1. Chuyển đổi an toàn giữa npub, nprofile và Hex Pubkey 64 ký tự (Zero-Crash & Hết lỗi TS)
  */
 export function normalizeToHex(input: string): { hex: string; npub: string } {
   const clean = input.trim();
@@ -96,18 +126,63 @@ export function normalizeToHex(input: string): { hex: string; npub: string } {
 }
 
 /**
- * 2. 🔥 KÉO PROFILE TRỰC TIẾP TỪ NOSTR WEBSOCKET RELAY POOL (CHUẨN P2P 100%) 🔥
+ * 🔥 2. TẢI DANH SÁCH RELAY CÁ NHÂN CỦA USER (CHUẨN NIP-65 / KIND 10002) 🔥
  */
-export async function fetchNostrProfile(npubOrHex: string): Promise<NostrProfile | null> {
+export async function fetchUserRelays(pubkeyOrNpub: string): Promise<string[]> {
+  const { hex: hexPubkey } = normalizeToHex(pubkeyOrNpub);
+  if (!hexPubkey || !/^[0-9a-fA-F]{64}$/.test(hexPubkey)) return DEFAULT_RELAYS;
+
+  const pool = new SimplePool();
+  try {
+    const timeoutPromise = new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 2500));
+    
+    // Query event Kind 10002 (NIP-65 Relay List Metadata)
+    const queryPromise = pool.querySync(DEFAULT_RELAYS, {
+      kinds: [10002],
+      authors: [hexPubkey],
+      limit: 1,
+    });
+
+    const events = await Promise.race([queryPromise, timeoutPromise]);
+
+    if (Array.isArray(events) && events.length > 0) {
+      const nip65Event = events[0];
+      const customRelays: string[] = [];
+
+      for (const tag of nip65Event.tags || []) {
+        if (tag[0] === "r" && tag[1]) {
+          customRelays.push(tag[1]);
+        }
+      }
+
+      if (customRelays.length > 0) {
+        return mergeRelays(customRelays, DEFAULT_RELAYS);
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to fetch NIP-65 relay list:", err);
+  } finally {
+    try {
+      pool.close(DEFAULT_RELAYS);
+    } catch {}
+  }
+
+  return DEFAULT_RELAYS;
+}
+
+/**
+ * 3. KÉO PROFILE TRỰC TIẾP TỪ NOSTR WEBSOCKET RELAY POOL (CHUẨN P2P 100%)
+ */
+export async function fetchNostrProfile(npubOrHex: string, customRelays?: string[]): Promise<NostrProfile | null> {
   const { hex: hexPubkey, npub: encodedNpub } = normalizeToHex(npubOrHex);
+  const targetRelays = mergeRelays(customRelays, DEFAULT_RELAYS);
   const pool = new SimplePool();
 
   // --- ƯU TIÊN 1: QUERY TRỰC TIẾP TỪ MẠNG LƯỚI WEBSOCKET RELAYS (P2P FOSS) ---
   try {
     const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
 
-    // Gửi subscription query event kind: 0 (Metadata) đến 6 relay đồng thời
-    const fetchPromise = pool.get(DEFAULT_RELAYS, {
+    const fetchPromise = pool.get(targetRelays, {
       kinds: [0],
       authors: [hexPubkey],
     });
@@ -129,7 +204,7 @@ export async function fetchNostrProfile(npubOrHex: string): Promise<NostrProfile
           lud16: metadata.lud16 || metadata.lud06,
           website: metadata.website,
           created_at: event.created_at,
-          relays_connected: DEFAULT_RELAYS.length,
+          relays_connected: targetRelays.length,
         };
       } catch (parseErr) {
         console.warn("Malformed JSON in kind:0 profile event:", parseErr);
@@ -138,9 +213,8 @@ export async function fetchNostrProfile(npubOrHex: string): Promise<NostrProfile
   } catch (err) {
     console.warn("Relay pool query timed out, trying fallback cache...");
   } finally {
-    // Đóng toàn bộ socket để giải phóng RAM & tránh memory leak
     try {
-      pool.close(DEFAULT_RELAYS);
+      pool.close(targetRelays);
     } catch {}
   }
 
@@ -173,7 +247,7 @@ export async function fetchNostrProfile(npubOrHex: string): Promise<NostrProfile
               lud16: profile.lud16 || profile.lud06,
               website: profile.website,
               created_at: kind0.created_at,
-              relays_connected: DEFAULT_RELAYS.length,
+              relays_connected: targetRelays.length,
             };
           } catch {}
         }
@@ -197,46 +271,36 @@ export async function fetchNostrProfile(npubOrHex: string): Promise<NostrProfile
       nip05: matched.nip05,
       lud16: matched.lud16,
       created_at: Math.floor(Date.now() / 1000) - 86400 * 400,
-      relays_connected: DEFAULT_RELAYS.length,
+      relays_connected: targetRelays.length,
     };
   }
 
   return null;
 }
-// Thêm vào cuối file src/lib/nostr.ts
-
-export interface NostrNote {
-  id: string;
-  pubkey: string;
-  content: string;
-  created_at: number;
-  tags: string[][];
-}
 
 /**
- * Kéo 3-5 bài viết mới nhất (Kind 1 - Short Text Note) từ Relay Pool
+ * 4. KÉO BÀI VIẾT MỚI NHẤT (KIND 1) TỪ RELAYS
  */
-export async function fetchRecentNotes(npubOrHex: string, limit: number = 5): Promise<NostrNote[]> {
+export async function fetchRecentNotes(npubOrHex: string, limit: number = 5, customRelays?: string[]): Promise<NostrNote[]> {
   const { hex: hexPubkey } = normalizeToHex(npubOrHex);
   if (!hexPubkey || !/^[0-9a-fA-F]{64}$/.test(hexPubkey)) return [];
 
+  const targetRelays = mergeRelays(customRelays, DEFAULT_RELAYS);
   const pool = new SimplePool();
 
   try {
     const timeoutPromise = new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3500));
     
-    // Gửi truy vấn querySync tới các Relays
-    const queryPromise = pool.querySync(DEFAULT_RELAYS, {
+    const queryPromise = pool.querySync(targetRelays, {
       kinds: [1],
       authors: [hexPubkey],
-      limit: limit * 2, // Kéo dôi ra để lọc
+      limit: limit * 2,
     });
 
     const events = await Promise.race([queryPromise, timeoutPromise]);
 
     if (!Array.isArray(events) || events.length === 0) return [];
 
-    // Lọc và sắp xếp bài đăng mới nhất
     return events
       .sort((a, b) => b.created_at - a.created_at)
       .slice(0, limit)
@@ -252,7 +316,7 @@ export async function fetchRecentNotes(npubOrHex: string, limit: number = 5): Pr
     return [];
   } finally {
     try {
-      pool.close(DEFAULT_RELAYS);
+      pool.close(targetRelays);
     } catch {}
   }
 }

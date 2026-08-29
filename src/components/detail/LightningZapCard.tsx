@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   Zap, 
   CheckCircle2, 
@@ -13,7 +13,10 @@ import {
   Lock,
   Sparkles,
   ArrowDownCircle,
-  ClipboardPaste
+  ClipboardPaste,
+  Server,
+  Settings2,
+  ChevronDown
 } from "lucide-react";
 import { generateSecretKey, finalizeEvent } from "nostr-tools/pure";
 import { nip19 } from "nostr-tools";
@@ -24,7 +27,9 @@ import {
   sendCashuNutZap, 
   createCashuMintQuote,
   pollMintAndClaimToken,
-  DEFAULT_CASHU_MINT 
+  RECOMMENDED_MINTS,
+  DEFAULT_CASHU_MINT,
+  isValidMintUrl
 } from "@/lib/cashu";
 
 interface ZapCardProps {
@@ -72,7 +77,13 @@ export default function LightningZapCard({
   // Cashu sub-mode: "mint" (Nạp trực tiếp) vs "paste" (Dán mã có sẵn)
   const [cashuMode, setCashuMode] = useState<"mint" | "paste">("mint");
 
-  // Common State
+  // Dynamic Cashu Mint Selector
+  const [selectedMintUrl, setSelectedMintUrl] = useState<string>(DEFAULT_CASHU_MINT);
+  const [isCustomMintInput, setIsCustomMintInput] = useState<boolean>(false);
+  const [customMintUrl, setCustomMintUrl] = useState<string>("");
+  const [isMintSettingsOpen, setIsMintSettingsOpen] = useState<boolean>(false);
+
+  // Common States
   const [sats, setSats] = useState<number>(100);
   const [comment, setComment] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -91,6 +102,28 @@ export default function LightningZapCard({
 
   const cleanHandle = name.toLowerCase().replace(/[^a-z0-9_]/g, "") || "creator";
   const recipientPubkey = pubkey || npub;
+
+  // Khôi phục Mint đã lưu trong LocalStorage khi mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedMint = localStorage.getItem("nostrpulse_selected_mint");
+      if (savedMint && isValidMintUrl(savedMint)) {
+        setSelectedMintUrl(savedMint);
+        if (!RECOMMENDED_MINTS.some(m => m.url === savedMint)) {
+          setIsCustomMintInput(true);
+          setCustomMintUrl(savedMint);
+        }
+      }
+    }
+  }, []);
+
+  // Cập nhật và lưu Mint đã chọn
+  const handleMintChange = (url: string) => {
+    setSelectedMintUrl(url);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("nostrpulse_selected_mint", url);
+    }
+  };
 
   // ----------------------------------------------------
   // 1. LIGHTNING ZAP (NIP-57)
@@ -233,7 +266,7 @@ export default function LightningZapCard({
   };
 
   // ----------------------------------------------------
-  // 🔥 2. CASHU: IN-APP MINTING (Đúc eCash trực tiếp)
+  // 2. CASHU: 1-CLICK IN-APP MINTING (Đúc eCash trực tiếp)
   // ----------------------------------------------------
   const handleInAppMintAndSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,23 +274,25 @@ export default function LightningZapCard({
 
     setIsProcessing(true);
     setStatus("idle");
-    setStatusMessage("Requesting Lightning Invoice from Cashu Mint...");
+    setStatusMessage("Requesting Lightning invoice from Cashu Mint...");
 
     try {
-      // 1. Tạo Lightning Invoice từ Minibits Mint
-      const { invoice, quoteId, mintUrl } = await createCashuMintQuote(sats, DEFAULT_CASHU_MINT);
+      const activeMint = isCustomMintInput && isValidMintUrl(customMintUrl)
+        ? customMintUrl.trim()
+        : selectedMintUrl;
+
+      // 1. Tạo Lightning Invoice từ Mint đã chọn
+      const { invoice, quoteId, mintUrl } = await createCashuMintQuote(sats, activeMint);
       
       setInvoicePr(invoice);
 
       // 2. Mở WebLN hoặc hiện QR cho User thanh toán
-      let paidViaWebln = false;
       if (typeof window !== "undefined" && (window as any).webln) {
         try {
           const webln = (window as any).webln;
           await webln.enable();
-          setStatusMessage("Awaiting WebLN confirmation...");
+          setStatusMessage("Awaiting WebLN payment confirmation...");
           await webln.sendPayment(invoice);
-          paidViaWebln = true;
         } catch {
           setIsQrOpen(true);
         }
@@ -265,16 +300,15 @@ export default function LightningZapCard({
         setIsQrOpen(true);
       }
 
-      setStatusMessage("⚡ Payment received! Minting cryptographic eCash tokens...");
+      setStatusMessage("⏳ Awaiting Lightning invoice payment (Scan QR or approve in wallet)...");
 
       // 3. Polling Mint để nhận token đã đúc
       const mintedToken = await pollMintAndClaimToken(sats, quoteId, mintUrl);
 
-      // Đóng QR Modal khi đã mint thành công
       setIsQrOpen(false);
       setStatusMessage("🔒 Encrypting NutZap and broadcasting to Nostr...");
 
-      // 4. Mã hóa và phát tán NutZap NIP-61 tới Creator
+      // 4. Mã hóa NIP-44 và phát tán NutZap tới Creator
       await sendCashuNutZap({
         recipientPubkey,
         cashuToken: mintedToken,
@@ -346,7 +380,7 @@ export default function LightningZapCard({
         cashuToken: cashuTokenInput.trim(),
         amountSats: verifiedCashuAmount,
         comment: comment.trim(),
-        mintUrl: verifiedMintUrl || DEFAULT_CASHU_MINT,
+        mintUrl: verifiedMintUrl || selectedMintUrl,
       });
 
       setStatus("success");
@@ -362,6 +396,7 @@ export default function LightningZapCard({
     }
   };
 
+  const activeMintName = RECOMMENDED_MINTS.find(m => m.url === selectedMintUrl)?.name || "Custom Mint";
   const displayTarget = activeTab === "lightning"
     ? (lud16 ? (lud16.startsWith("@") ? `${name.toLowerCase()}${lud16}` : lud16) : `${cleanHandle}@getalby.com (Guess)`)
     : `Nostr Identity (${recipientPubkey.slice(0, 10)}...)`;
@@ -518,7 +553,7 @@ export default function LightningZapCard({
         {activeTab === "cashu" && (
           <div className="space-y-6">
             
-            {/* Cashu Sub-mode selector */}
+            {/* Mode Switcher */}
             <div className="grid grid-cols-2 gap-2 bg-slate-800/80 p-1 rounded-2xl border border-slate-700">
               <button
                 type="button"
@@ -547,11 +582,102 @@ export default function LightningZapCard({
               </button>
             </div>
 
+            {/* 🔥 DYNAMIC CASHU MINT SELECTOR 🔥 */}
+            <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800/90 flex flex-col gap-2">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5 text-slate-300 font-bold">
+                  <Server className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Target Cashu Mint:</span>
+                  <span className="text-emerald-400 font-mono font-bold bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-900/50">
+                    {activeMintName}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsMintSettingsOpen(!isMintSettingsOpen)}
+                  className="text-slate-400 hover:text-slate-200 flex items-center gap-1 font-bold text-[11px] cursor-pointer"
+                >
+                  <Settings2 className="w-3.5 h-3.5" />
+                  <span>{isMintSettingsOpen ? "Close" : "Change"}</span>
+                  <ChevronDown className={`w-3 h-3 transition-transform ${isMintSettingsOpen ? "rotate-180" : ""}`} />
+                </button>
+              </div>
+
+              {/* Mint Dropdown / Custom Config */}
+              {isMintSettingsOpen && (
+                <div className="mt-2 pt-2 border-t border-slate-800 space-y-2.5 text-xs animate-in fade-in duration-200">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Choose from Recommended Mints:
+                  </label>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {RECOMMENDED_MINTS.map((mint) => (
+                      <button
+                        type="button"
+                        key={mint.url}
+                        onClick={() => {
+                          setIsCustomMintInput(false);
+                          handleMintChange(mint.url);
+                          setIsMintSettingsOpen(false);
+                        }}
+                        className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
+                          selectedMintUrl === mint.url && !isCustomMintInput
+                            ? "bg-emerald-950/60 border-emerald-500 text-white"
+                            : "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800"
+                        }`}
+                      >
+                        <div className="font-bold text-slate-200 flex items-center justify-between">
+                          <span>{mint.name}</span>
+                          {mint.recommended && (
+                            <span className="text-[9px] bg-emerald-500 text-slate-950 px-1.5 py-0.2 rounded font-black">
+                              DEFAULT
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-500 truncate mt-0.5 font-mono">{mint.url}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Custom Mint Input */}
+                  <div className="pt-2">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                      Or use a Custom Mint URL:
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        value={customMintUrl}
+                        onChange={(e) => setCustomMintUrl(e.target.value)}
+                        placeholder="https://my-private-mint.com"
+                        className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-emerald-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isValidMintUrl(customMintUrl)) {
+                            setIsCustomMintInput(true);
+                            handleMintChange(customMintUrl.trim());
+                            setIsMintSettingsOpen(false);
+                          }
+                        }}
+                        disabled={!isValidMintUrl(customMintUrl)}
+                        className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs cursor-pointer"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Info Banner */}
             <div className="bg-emerald-950/30 border border-emerald-800/40 p-4 rounded-2xl flex items-start gap-3">
               <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
               <div className="text-xs text-slate-300 leading-relaxed">
-                <span className="font-bold text-emerald-400">Untraceable Chaumian eCash:</span> Encrypted end-to-end with NIP-44. Token is delivered privately via Nostr, even if the creator's Lightning node is offline.
+                <span className="font-bold text-emerald-400">Untraceable Chaumian eCash:</span> Encrypted end-to-end with NIP-44. Token is delivered privately via Nostr, even if the creator&apos;s Lightning node is offline.
               </div>
             </div>
 
@@ -755,7 +881,7 @@ export default function LightningZapCard({
           </div>
         )}
 
-        {/* Footer info */}
+        {/* Footer Info */}
         <div className="mt-6 pt-6 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 flex-wrap gap-2">
           <div className="flex items-center gap-1.5">
             {activeTab === "lightning" ? (
@@ -776,13 +902,13 @@ export default function LightningZapCard({
         </div>
       </div>
 
-      {/* POPUP MODAL QR CODE (Dùng chung cho cả Lightning Zap và Cashu Mint Quote) */}
+      {/* POPUP MODAL QR CODE */}
       <ZapQrModal
         isOpen={isQrOpen}
         onClose={() => setIsQrOpen(false)}
         invoicePr={invoicePr}
         amountSats={sats}
-        recipientName={activeTab === "lightning" ? name : "Minibits Cashu Mint"}
+        recipientName={activeTab === "lightning" ? name : activeMintName}
         zapEvent={zapEventPayload}
       />
     </>

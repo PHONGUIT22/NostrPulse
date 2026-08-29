@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Zap, Radio, Sparkles, Clock, MessageSquare, ShieldCheck, Activity } from "lucide-react";
 import { nip19 } from "nostr-tools";
+import { fetchUserRelays, mergeRelays, DEFAULT_RELAYS } from "@/lib/nostr";
 
 interface ZapReceipt {
   id: string;
@@ -19,130 +20,141 @@ interface Props {
   name: string;
 }
 
-// 4 Relay hàng đầu chuyên index Zap receipts (Kind 9735)
-const RELAYS_TO_QUERY = [
-  "wss://relay.damus.io",
-  "wss://nos.lol",
-  "wss://relay.primal.net",
-  "wss://relay.nostr.band",
-];
-
 export default function LiveZapFeed({ pubkey, name }: Props) {
   const [zaps, setZaps] = useState<ZapReceipt[]>([]);
   const [connectedCount, setConnectedCount] = useState<number>(0);
+  const [totalRelaysCount, setTotalRelaysCount] = useState<number>(4);
   const [hasNewFlash, setHasNewFlash] = useState(false);
 
   useEffect(() => {
     if (!pubkey) return;
 
+    let isMounted = true;
     const sockets: WebSocket[] = [];
     const subId = `zap_pool_${pubkey.slice(0, 8)}_${Math.floor(Math.random() * 1000)}`;
     let activeSockets = 0;
 
-    // 🔥 CẮM ĐỒNG THỜI 4 WEBSOCKET VÀO 4 RELAY LỚN NHẤT 🔥
-    RELAYS_TO_QUERY.forEach((relayUrl) => {
+    const connectToDynamicRelays = async () => {
+      // 1. Kéo danh sách Relay NIP-65 riêng của Creator này
+      const creatorRelays = await fetchUserRelays(pubkey);
+      
+      // 2. Lấy thêm Relay của User đang đăng nhập nếu có
+      let loggedUserRelays: string[] = [];
       try {
-        const ws = new WebSocket(relayUrl);
-        sockets.push(ws);
-
-        ws.onopen = () => {
-          activeSockets += 1;
-          setConnectedCount(activeSockets);
-
-          // Gửi lệnh REQ đăng ký lắng nghe Kind 9735
-          const req = [
-            "REQ",
-            subId,
-            {
-              kinds: [9735],
-              "#p": [pubkey],
-              limit: 10,
-            },
-          ];
-          ws.send(JSON.stringify(req));
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const msg = JSON.parse(event.data);
-            if (msg[0] === "EVENT" && msg[2]?.kind === 9735) {
-              const zapEvent = msg[2];
-
-              // Bóc tách NIP-57 Zap Request (Kind 9734) lồng bên trong tag "description"
-              let amountSats = 21;
-              let comment = "Value-4-Value Zap ⚡";
-              
-              // Mã hóa Bech32 chuẩn cho pubkey của Zap Receipt
-              let sender = "Anonymous";
-              if (zapEvent.pubkey) {
-                try {
-                  const encodedNpub = nip19.npubEncode(zapEvent.pubkey);
-                  sender = `${encodedNpub.slice(0, 10)}...${encodedNpub.slice(-4)}`;
-                } catch {
-                  sender = `anon_${zapEvent.pubkey.slice(0, 6)}`;
-                }
-              }
-
-              const descTag = zapEvent.tags?.find((t: any) => t[0] === "description");
-              if (descTag && descTag[1]) {
-                try {
-                  const zapRequest = JSON.parse(descTag[1]);
-                  if (zapRequest.content) comment = zapRequest.content;
-                  const amtTag = zapRequest.tags?.find((t: any) => t[0] === "amount");
-                  if (amtTag && amtTag[1]) {
-                    amountSats = Math.round(Number(amtTag[1]) / 1000);
-                  }
-                  
-                  // Mã hóa Bech32 chuẩn cho người gửi thực sự (từ Kind 9734)
-                  if (zapRequest.pubkey) {
-                    try {
-                      const senderNpub = nip19.npubEncode(zapRequest.pubkey);
-                      sender = `${senderNpub.slice(0, 10)}...${senderNpub.slice(-4)}`;
-                    } catch {
-                      sender = `anon_${zapRequest.pubkey.slice(0, 6)}`;
-                    }
-                  }
-                } catch {}
-              }
-
-              const newZap: ZapReceipt = {
-                id: zapEvent.id,
-                senderPubkey: zapEvent.pubkey,
-                senderName: sender,
-                amountSats: amountSats || 21,
-                comment: comment,
-                timestamp: zapEvent.created_at || Math.floor(Date.now() / 1000),
-                relaySource: relayUrl.replace("wss://", ""),
-              };
-
-              // Gom và lọc trùng lặp ID giữa các relay, xếp mới nhất lên đầu
-              setZaps((prev) => {
-                if (prev.some((z) => z.id === newZap.id)) return prev;
-                setHasNewFlash(true);
-                setTimeout(() => setHasNewFlash(false), 2500);
-
-                return [newZap, ...prev]
-                  .sort((a, b) => b.timestamp - a.timestamp)
-                  .slice(0, 8);
-              });
-            }
-          } catch {}
-        };
-
-        ws.onerror = () => {
-          activeSockets = Math.max(0, activeSockets - 1);
-          setConnectedCount(activeSockets);
-        };
-
-        ws.onclose = () => {
-          activeSockets = Math.max(0, activeSockets - 1);
-          setConnectedCount(activeSockets);
-        };
+        const saved = localStorage.getItem("nostr_user_relays");
+        if (saved) loggedUserRelays = JSON.parse(saved);
       } catch {}
-    });
 
-    // Dọn dẹp đóng tất cả socket khi chuyển trang
+      // 3. Gộp và chọn lọc ra 4-6 Relay tối ưu nhất
+      const mergedList = mergeRelays([...creatorRelays, ...loggedUserRelays], DEFAULT_RELAYS).slice(0, 6);
+      
+      if (!isMounted) return;
+      setTotalRelaysCount(mergedList.length);
+
+      // 4. Mở kết nối WebSocket tới từng Relay trong danh sách đã gộp
+      mergedList.forEach((relayUrl) => {
+        try {
+          const ws = new WebSocket(relayUrl);
+          sockets.push(ws);
+
+          ws.onopen = () => {
+            if (!isMounted) return;
+            activeSockets += 1;
+            setConnectedCount(activeSockets);
+
+            const req = [
+              "REQ",
+              subId,
+              {
+                kinds: [9735],
+                "#p": [pubkey],
+                limit: 10,
+              },
+            ];
+            ws.send(JSON.stringify(req));
+          };
+
+          ws.onmessage = (event) => {
+            try {
+              const msg = JSON.parse(event.data);
+              if (msg[0] === "EVENT" && msg[2]?.kind === 9735) {
+                const zapEvent = msg[2];
+
+                let amountSats = 21;
+                let comment = "Value-4-Value Zap ⚡";
+                let sender = "Anonymous";
+
+                if (zapEvent.pubkey) {
+                  try {
+                    const encodedNpub = nip19.npubEncode(zapEvent.pubkey);
+                    sender = `${encodedNpub.slice(0, 10)}...${encodedNpub.slice(-4)}`;
+                  } catch {
+                    sender = `anon_${zapEvent.pubkey.slice(0, 6)}`;
+                  }
+                }
+
+                const descTag = zapEvent.tags?.find((t: any) => t[0] === "description");
+                if (descTag && descTag[1]) {
+                  try {
+                    const zapRequest = JSON.parse(descTag[1]);
+                    if (zapRequest.content) comment = zapRequest.content;
+                    const amtTag = zapRequest.tags?.find((t: any) => t[0] === "amount");
+                    if (amtTag && amtTag[1]) {
+                      amountSats = Math.round(Number(amtTag[1]) / 1000);
+                    }
+                    if (zapRequest.pubkey) {
+                      try {
+                        const senderNpub = nip19.npubEncode(zapRequest.pubkey);
+                        sender = `${senderNpub.slice(0, 10)}...${senderNpub.slice(-4)}`;
+                      } catch {
+                        sender = `anon_${zapRequest.pubkey.slice(0, 6)}`;
+                      }
+                    }
+                  } catch {}
+                }
+
+                const newZap: ZapReceipt = {
+                  id: zapEvent.id,
+                  senderPubkey: zapEvent.pubkey,
+                  senderName: sender,
+                  amountSats: amountSats || 21,
+                  comment: comment,
+                  timestamp: zapEvent.created_at || Math.floor(Date.now() / 1000),
+                  relaySource: relayUrl.replace("wss://", "").replace("ws://", ""),
+                };
+
+                setZaps((prev) => {
+                  if (prev.some((z) => z.id === newZap.id)) return prev;
+                  setHasNewFlash(true);
+                  setTimeout(() => setHasNewFlash(false), 2500);
+
+                  return [newZap, ...prev]
+                    .sort((a, b) => b.timestamp - a.timestamp)
+                    .slice(0, 8);
+                });
+              }
+            } catch {}
+          };
+
+          ws.onerror = () => {
+            if (!isMounted) return;
+            activeSockets = Math.max(0, activeSockets - 1);
+            setConnectedCount(activeSockets);
+          };
+
+          ws.onclose = () => {
+            if (!isMounted) return;
+            activeSockets = Math.max(0, activeSockets - 1);
+            setConnectedCount(activeSockets);
+          };
+        } catch {}
+      });
+    };
+
+    connectToDynamicRelays();
+
     return () => {
+      isMounted = false;
       sockets.forEach((ws) => {
         if (ws.readyState === WebSocket.OPEN) {
           try {
@@ -183,18 +195,18 @@ export default function LiveZapFeed({ pubkey, name }: Props) {
               )}
             </h3>
             <p className="text-xs text-slate-400">
-              Kind 9735 Receipts multi-cast via 4 public relays
+              Kind 9735 Receipts multi-cast via dynamic NIP-65 relays
             </p>
           </div>
         </div>
 
-        {/* TRẠNG THÁI KẾT NỐI MULTI-RELAY */}
+        {/* TRẠNG THÁI KẾT NỐI RELAY ĐỘNG */}
         <div className="flex items-center gap-2 bg-slate-950 px-3.5 py-1.5 rounded-full border border-slate-800 text-xs w-fit">
           <span className={`w-2 h-2 rounded-full ${
             connectedCount > 0 ? "bg-emerald-500 animate-ping" : "bg-amber-400 animate-pulse"
           }`} />
           <span className="text-[11px] font-mono text-slate-300 font-bold">
-            {connectedCount > 0 ? `🟢 ${connectedCount}/4 Relays Connected` : "🟡 Connecting Relays..."}
+            {connectedCount > 0 ? `🟢 ${connectedCount}/${totalRelaysCount} Relays Synced` : "🟡 Syncing Relays..."}
           </span>
         </div>
       </div>
@@ -247,7 +259,7 @@ export default function LiveZapFeed({ pubkey, name }: Props) {
           <div className="p-8 text-center bg-slate-950/40 rounded-2xl border border-slate-800/60 space-y-2">
             <Radio className="w-8 h-8 text-purple-400 mx-auto animate-pulse" />
             <h4 className="text-sm font-bold text-slate-300">
-              Listening across 4 Nostr Relays for {name}...
+              Listening across {totalRelaysCount} Nostr Relays for {name}...
             </h4>
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
               Scan the QR code above or send a Lightning Zap to trigger live on-chain event stream!
@@ -261,7 +273,7 @@ export default function LiveZapFeed({ pubkey, name }: Props) {
         <span className="flex items-center gap-1">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Cryptographic Kind 9735 Proof
         </span>
-        <span>Synced across Nostr Pool</span>
+        <span>NIP-65 Dynamic Relay Mesh</span>
       </div>
 
     </div>

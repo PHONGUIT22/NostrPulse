@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   Sparkles
 } from "lucide-react";
+import { fetchUserRelays, mergeRelays } from "@/lib/nostr";
 
 export default function NostrLoginButton() {
   const [isConnecting, setIsConnecting] = useState(false);
@@ -21,7 +22,6 @@ export default function NostrLoginButton() {
   const [showInstallModal, setShowInstallModal] = useState(false);
   const router = useRouter();
 
-  // Kiểm tra xem đã từng kết nối trước đó chưa
   useEffect(() => {
     const saved = localStorage.getItem("nostr_connected_npub");
     if (saved) {
@@ -29,19 +29,17 @@ export default function NostrLoginButton() {
     }
   }, []);
 
-  // 🔥 HÀM ĐĂNG NHẬP CHUẨN GIAO THỨC NIP-07 🔥
+  // 🔥 ĐĂNG NHẬP NIP-07 & ĐỒNG BỘ RELAY NIP-65 🔥
   const handleNip07Login = async () => {
     setIsConnecting(true);
 
     try {
-      // 1. Kiểm tra xem trình duyệt có cài Extension Nostr (Alby, nos2x,...) không
-      if (typeof window === "undefined" || !(window as any).nostr) {
+      if (typeof window !== "undefined" && !(window as any).nostr) {
         setShowInstallModal(true);
         setIsConnecting(false);
         return;
       }
 
-      // 2. Yêu cầu Extension cấp Public Key
       const nostr = (window as any).nostr;
       const hexPubkey = await nostr.getPublicKey();
 
@@ -49,14 +47,28 @@ export default function NostrLoginButton() {
         throw new Error("No public key returned from Nostr extension");
       }
 
-      // 3. Chuyển đổi Hex sang định dạng npub1... chuẩn
       const npub = nip19.npubEncode(hexPubkey.toLowerCase());
 
-      // 4. Lưu lại phiên kết nối
+      // 1. Lấy danh sách Relay từ chính Extension (NIP-07 getRelays)
+      let extensionRelays: string[] = [];
+      if (typeof nostr.getRelays === "function") {
+        try {
+          const rawRelaysObj = await nostr.getRelays();
+          if (rawRelaysObj && typeof rawRelaysObj === "object") {
+            extensionRelays = Object.keys(rawRelaysObj);
+          }
+        } catch {}
+      }
+
+      // 2. Kéo danh sách Relay NIP-65 trên mạng lưới của Pubkey này
+      const nip65Relays = await fetchUserRelays(hexPubkey);
+      const userAllRelays = mergeRelays(extensionRelays, nip65Relays);
+
+      // 3. Lưu thông tin phiên đăng nhập & Relay list vào LocalStorage
       localStorage.setItem("nostr_connected_npub", npub);
+      localStorage.setItem("nostr_user_relays", JSON.stringify(userAllRelays));
       setUserNpub(npub);
 
-      // 5. Chuyển hướng ngay tới Profile của chính họ để chấm điểm Trust Score!
       router.push(`/p/${npub}`);
     } catch (err: any) {
       console.warn("NIP-07 Login error:", err);
@@ -68,12 +80,12 @@ export default function NostrLoginButton() {
   const handleDisconnect = (e: React.MouseEvent) => {
     e.stopPropagation();
     localStorage.removeItem("nostr_connected_npub");
+    localStorage.removeItem("nostr_user_relays");
     setUserNpub(null);
   };
 
   return (
     <>
-      {/* NÚT ĐĂNG NHẬP HOẶC XEM PROFILE CỦA TÔI */}
       {userNpub ? (
         <div className="flex items-center gap-2">
           <button
@@ -113,7 +125,7 @@ export default function NostrLoginButton() {
         </button>
       )}
 
-      {/* POPUP HƯỚNG DẪN CÀI EXTENSION NẾU CHƯA CÓ */}
+      {/* Modal Cài Extension */}
       {showInstallModal && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
