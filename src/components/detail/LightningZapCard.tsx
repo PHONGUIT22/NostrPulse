@@ -11,7 +11,9 @@ import {
   Coins,
   ShieldCheck,
   Lock,
-  Sparkles
+  Sparkles,
+  ArrowDownCircle,
+  ClipboardPaste
 } from "lucide-react";
 import { generateSecretKey, finalizeEvent } from "nostr-tools/pure";
 import { nip19 } from "nostr-tools";
@@ -20,6 +22,8 @@ import {
   parseCashuToken, 
   verifyTokenWithMint, 
   sendCashuNutZap, 
+  createCashuMintQuote,
+  pollMintAndClaimToken,
   DEFAULT_CASHU_MINT 
 } from "@/lib/cashu";
 
@@ -32,7 +36,6 @@ interface ZapCardProps {
 
 const PRESET_AMOUNTS = [21, 100, 500, 1000, 5000, 21000];
 
-// 1. Phân giải địa chỉ Lightning: Ưu tiên thật, fallback Alby để dự phòng
 function resolveCandidateEndpoints(lud16: string | undefined, defaultHandle: string): { endpoint: string; rawAddress: string }[] {
   const list: { endpoint: string; rawAddress: string }[] = [];
   const cleanUser = defaultHandle.toLowerCase().replace(/[^a-z0-9_]/g, "") || "creator";
@@ -49,7 +52,6 @@ function resolveCandidateEndpoints(lud16: string | undefined, defaultHandle: str
     }
   }
 
-  // Luôn dự phòng Alby Gateway nếu địa chỉ trên bị xịt
   list.push({
     endpoint: `https://getalby.com/.well-known/lnurlp/${cleanUser}`,
     rawAddress: `${cleanUser}@getalby.com`,
@@ -64,8 +66,11 @@ export default function LightningZapCard({
   name = "Creator",
   pubkey
 }: ZapCardProps) {
-  // Tab Switch: Lightning vs Cashu
+  // Tabs: Lightning vs Cashu
   const [activeTab, setActiveTab] = useState<"lightning" | "cashu">("lightning");
+  
+  // Cashu sub-mode: "mint" (Nạp trực tiếp) vs "paste" (Dán mã có sẵn)
+  const [cashuMode, setCashuMode] = useState<"mint" | "paste">("mint");
 
   // Common State
   const [sats, setSats] = useState<number>(100);
@@ -74,12 +79,12 @@ export default function LightningZapCard({
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
   const [statusMessage, setStatusMessage] = useState<string>("");
 
-  // Lightning States
+  // Lightning QR State
   const [isQrOpen, setIsQrOpen] = useState(false);
   const [invoicePr, setInvoicePr] = useState("");
   const [zapEventPayload, setZapEventPayload] = useState<any>(null);
 
-  // Cashu States
+  // Cashu Paste State
   const [cashuTokenInput, setCashuTokenInput] = useState<string>("");
   const [verifiedCashuAmount, setVerifiedCashuAmount] = useState<number | null>(null);
   const [verifiedMintUrl, setVerifiedMintUrl] = useState<string>("");
@@ -88,7 +93,7 @@ export default function LightningZapCard({
   const recipientPubkey = pubkey || npub;
 
   // ----------------------------------------------------
-  // XỬ LÝ 1: LIGHTNING ZAP (NIP-57 / Double-Tap Engine)
+  // 1. LIGHTNING ZAP (NIP-57)
   // ----------------------------------------------------
   const handleLightningZap = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,7 +110,6 @@ export default function LightningZapCard({
 
       let lnurlData: any = null;
 
-      // 1. Fetch cấu hình Node (Timeout 6s)
       for (const item of candidates) {
         try {
           const res = await fetch(item.endpoint, {
@@ -119,16 +123,13 @@ export default function LightningZapCard({
               break;
             }
           }
-        } catch (e) {
-          console.warn("Skipping candidate endpoint:", item.endpoint);
-        }
+        } catch {}
       }
 
       if (!lnurlData?.callback) {
         throw new Error("Unable to connect to the creator's Lightning provider.");
       }
 
-      // 2. Ký NIP-57: Chuẩn hóa pubkey về Hex để chống lỗi Relay
       let signedZapEvent: any = null;
       let hexPubkey = pubkey || "";
       if (hexPubkey.startsWith("npub1")) {
@@ -166,7 +167,6 @@ export default function LightningZapCard({
       const callbackUrl = new URL(lnurlData.callback);
       callbackUrl.searchParams.append("amount", amountMsats.toString());
 
-      // 3. THỬ LẦN 1: Gửi Request chuẩn NIP-57
       try {
         const fetchUrl1 = new URL(callbackUrl.toString());
         if (signedZapEvent) {
@@ -180,14 +180,10 @@ export default function LightningZapCard({
             generatedPr = json1.pr;
           }
         }
-      } catch (e) {
-        console.warn("NIP-57 Request failed. Retrying with basic LNURL...");
-      }
+      } catch {}
 
-      // 4. THỬ LẦN 2 (CỨU CÁNH): LNURL-Pay cơ bản
       if (!generatedPr) {
         const fetchUrl2 = new URL(callbackUrl.toString());
-        
         if (comment.trim() && lnurlData.commentAllowed > 0) {
           fetchUrl2.searchParams.append("comment", comment.trim().substring(0, lnurlData.commentAllowed));
         }
@@ -198,18 +194,13 @@ export default function LightningZapCard({
         if (json2.pr && json2.pr.toLowerCase().startsWith("lnbc")) {
           generatedPr = json2.pr;
         } else {
-          const providerError = json2.reason || "";
-          if (providerError.includes("not properly configured")) {
-            throw new Error("Lightning node error: This creator is using an inactive or unconfigured address.");
-          }
-          throw new Error(providerError || "The Lightning node refused to generate an invoice.");
+          throw new Error(json2.reason || "The Lightning node refused to generate an invoice.");
         }
       }
 
       setInvoicePr(generatedPr);
       setZapEventPayload(signedZapEvent);
 
-      // 5. Mở WebLN hoặc bật QR Modal
       if (typeof window !== "undefined" && (window as any).webln) {
         try {
           const webln = (window as any).webln;
@@ -242,7 +233,70 @@ export default function LightningZapCard({
   };
 
   // ----------------------------------------------------
-  // XỬ LÝ 2: CASHU eCASH NUTZAP (NIP-61 / Chaumian eCash)
+  // 🔥 2. CASHU: IN-APP MINTING (Đúc eCash trực tiếp)
+  // ----------------------------------------------------
+  const handleInAppMintAndSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (sats <= 0) return;
+
+    setIsProcessing(true);
+    setStatus("idle");
+    setStatusMessage("Requesting Lightning Invoice from Cashu Mint...");
+
+    try {
+      // 1. Tạo Lightning Invoice từ Minibits Mint
+      const { invoice, quoteId, mintUrl } = await createCashuMintQuote(sats, DEFAULT_CASHU_MINT);
+      
+      setInvoicePr(invoice);
+
+      // 2. Mở WebLN hoặc hiện QR cho User thanh toán
+      let paidViaWebln = false;
+      if (typeof window !== "undefined" && (window as any).webln) {
+        try {
+          const webln = (window as any).webln;
+          await webln.enable();
+          setStatusMessage("Awaiting WebLN confirmation...");
+          await webln.sendPayment(invoice);
+          paidViaWebln = true;
+        } catch {
+          setIsQrOpen(true);
+        }
+      } else {
+        setIsQrOpen(true);
+      }
+
+      setStatusMessage("⚡ Payment received! Minting cryptographic eCash tokens...");
+
+      // 3. Polling Mint để nhận token đã đúc
+      const mintedToken = await pollMintAndClaimToken(sats, quoteId, mintUrl);
+
+      // Đóng QR Modal khi đã mint thành công
+      setIsQrOpen(false);
+      setStatusMessage("🔒 Encrypting NutZap and broadcasting to Nostr...");
+
+      // 4. Mã hóa và phát tán NutZap NIP-61 tới Creator
+      await sendCashuNutZap({
+        recipientPubkey,
+        cashuToken: mintedToken,
+        amountSats: sats,
+        comment: comment.trim(),
+        mintUrl,
+      });
+
+      setStatus("success");
+      setStatusMessage(`🥜 Success! Minted & delivered ${sats.toLocaleString()} Sats eCash NutZap to ${name}!`);
+      setComment("");
+    } catch (err: any) {
+      console.error("In-app minting error:", err);
+      setStatus("error");
+      setStatusMessage(err.message || "Failed to mint and send eCash.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // ----------------------------------------------------
+  // 3. CASHU: DÁN MÃ CÓ SẴN (PASTE TOKEN)
   // ----------------------------------------------------
   const handleVerifyCashuToken = async () => {
     if (!cashuTokenInput.trim()) return;
@@ -273,7 +327,7 @@ export default function LightningZapCard({
     }
   };
 
-  const handleSendCashuNutZap = async (e: React.FormEvent) => {
+  const handleSendPastedCashuNutZap = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cashuTokenInput.trim()) return;
 
@@ -296,12 +350,11 @@ export default function LightningZapCard({
       });
 
       setStatus("success");
-      setStatusMessage(`🥜 NutZap Sent! Successfully delivered ${verifiedCashuAmount.toLocaleString()} Sats in eCash to ${name}.`);
+      setStatusMessage(`🥜 NutZap Sent! Delivered ${verifiedCashuAmount.toLocaleString()} Sats in eCash to ${name}.`);
       setCashuTokenInput("");
       setVerifiedCashuAmount(null);
       setComment("");
     } catch (err: any) {
-      console.error("NutZap error:", err);
       setStatus("error");
       setStatusMessage(err.message || "Failed to broadcast Cashu NutZap.");
     } finally {
@@ -311,20 +364,20 @@ export default function LightningZapCard({
 
   const displayTarget = activeTab === "lightning"
     ? (lud16 ? (lud16.startsWith("@") ? `${name.toLowerCase()}${lud16}` : lud16) : `${cleanHandle}@getalby.com (Guess)`)
-    : `Nostr Pubkey (${recipientPubkey.slice(0, 12)}...)`;
+    : `Nostr Identity (${recipientPubkey.slice(0, 10)}...)`;
 
   return (
     <>
       <div className="bg-slate-900 text-white p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-xl">
         
-        {/* Header & Tab Selector */}
+        {/* Header Tabs */}
         <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
           <div>
             <h2 className="text-2xl font-black">Support {name}</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Choose your preferred Bitcoin payment rail</p>
+            <p className="text-xs text-slate-400 mt-0.5">Value-4-Value Instant Settlement</p>
           </div>
 
-          {/* Tab Selector Buttons */}
+          {/* Main Tab Selector */}
           <div className="bg-slate-800/90 p-1.5 rounded-2xl border border-slate-700/80 flex items-center gap-1">
             <button
               type="button"
@@ -412,7 +465,6 @@ export default function LightningZapCard({
               </div>
             </div>
 
-            {/* Thông báo trạng thái */}
             {statusMessage && (
               <div className={`p-4 rounded-2xl text-xs flex items-center justify-between gap-2.5 border ${
                 status === "success" 
@@ -464,84 +516,128 @@ export default function LightningZapCard({
         {/* TAB 2: CASHU eCASH (NUTZAP) */}
         {/* ------------------------------------------------------------- */}
         {activeTab === "cashu" && (
-          <form onSubmit={handleSendCashuNutZap} className="space-y-6">
+          <div className="space-y-6">
+            
+            {/* Cashu Sub-mode selector */}
+            <div className="grid grid-cols-2 gap-2 bg-slate-800/80 p-1 rounded-2xl border border-slate-700">
+              <button
+                type="button"
+                onClick={() => { setCashuMode("mint"); setStatus("idle"); setStatusMessage(""); }}
+                className={`py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  cashuMode === "mint"
+                    ? "bg-emerald-500 text-slate-950 shadow-md font-black"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <ArrowDownCircle className="w-3.5 h-3.5" />
+                <span>1-Click Mint & Send</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setCashuMode("paste"); setStatus("idle"); setStatusMessage(""); }}
+                className={`py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  cashuMode === "paste"
+                    ? "bg-emerald-500 text-slate-950 shadow-md font-black"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <ClipboardPaste className="w-3.5 h-3.5" />
+                <span>Paste Token</span>
+              </button>
+            </div>
+
+            {/* Info Banner */}
             <div className="bg-emerald-950/30 border border-emerald-800/40 p-4 rounded-2xl flex items-start gap-3">
               <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
               <div className="text-xs text-slate-300 leading-relaxed">
-                <span className="font-bold text-emerald-400">Untraceable Chaumian eCash:</span> Paste a <code className="text-emerald-300 bg-emerald-950/60 px-1 py-0.5 rounded font-mono">cashuA...</code> token from Minibits, eNuts, or Nutstash. The tokens will be delivered to the creator instantly, even if their Lightning node is offline.
+                <span className="font-bold text-emerald-400">Untraceable Chaumian eCash:</span> Encrypted end-to-end with NIP-44. Token is delivered privately via Nostr, even if the creator's Lightning node is offline.
               </div>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Paste Cashu Token (cashuA... or cashuB...)
-                </label>
-                {verifiedCashuAmount && (
-                  <span className="text-xs font-black text-emerald-400 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> {verifiedCashuAmount.toLocaleString()} Sats Verified
-                  </span>
-                )}
-              </div>
-              <textarea
-                rows={3}
-                value={cashuTokenInput}
-                onChange={(e) => {
-                  setCashuTokenInput(e.target.value);
-                  setVerifiedCashuAmount(null);
-                }}
-                placeholder="cashuAeyJ0b2tlbiI6W3sibWludCI6Imh0dHBzOi8vbWludC5taW5pYml0cy5jYXNoL0JpdGNvaW4iLCJwcm9vZnMiOlt7ImFtb3VudCI6MTAwLCJpZCI6... "
-                className="w-full bg-slate-800 border border-slate-700 rounded-2xl p-3.5 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 transition-colors text-xs font-mono break-all"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
-                Optional Message / Memo
-              </label>
-              <input
-                type="text"
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Private eCash tip for your open source work! 🥜"
-                className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 transition-colors text-sm"
-              />
-            </div>
-
-            {/* Thông báo trạng thái */}
-            {statusMessage && (
-              <div className={`p-4 rounded-2xl text-xs flex items-center justify-between gap-2.5 border ${
-                status === "success" 
-                  ? "bg-emerald-950/60 border-emerald-800 text-emerald-300"
-                  : "bg-rose-950/60 border-rose-800 text-rose-300"
-              }`}>
-                <div className="flex items-center gap-2">
-                  {status === "success" ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                  )}
-                  <span>{statusMessage}</span>
+            {/* SUBMODE 1: IN-APP MINT */}
+            {cashuMode === "mint" && (
+              <form onSubmit={handleInAppMintAndSend} className="space-y-6">
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-3">
+                    Select Sats to Mint & Tip
+                  </label>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+                    {PRESET_AMOUNTS.map((amt) => (
+                      <button
+                        type="button"
+                        key={amt}
+                        onClick={() => setSats(amt)}
+                        className={`py-3 rounded-2xl font-black text-xs transition-all border cursor-pointer ${
+                          sats === amt
+                            ? "bg-emerald-500 border-emerald-400 text-slate-950 shadow-lg scale-102"
+                            : "bg-slate-800/90 border-slate-700 text-slate-300 hover:bg-slate-800 hover:border-slate-600"
+                        }`}
+                      >
+                        🥜 {amt.toLocaleString()}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
 
-            <div className="flex gap-3">
-              {!verifiedCashuAmount ? (
-                <button
-                  type="button"
-                  onClick={handleVerifyCashuToken}
-                  disabled={isProcessing || !cashuTokenInput.trim()}
-                  className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50 cursor-pointer"
-                >
-                  {isProcessing ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  )}
-                  <span>Verify eCash Token</span>
-                </button>
-              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                      Custom Amount (Sats)
+                    </label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-4 text-emerald-400 font-bold text-sm">🥜</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={sats}
+                        onChange={(e) => setSats(Math.max(1, Number(e.target.value)))}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-2xl pl-10 pr-4 py-3 text-white font-bold focus:outline-none focus:border-emerald-400 transition-colors text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                      Encrypted Memo (NIP-44)
+                    </label>
+                    <input
+                      type="text"
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      placeholder="Private eCash tip! 🥜"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 transition-colors text-sm"
+                    />
+                  </div>
+                </div>
+
+                {statusMessage && (
+                  <div className={`p-4 rounded-2xl text-xs flex items-center justify-between gap-2.5 border ${
+                    status === "success" 
+                      ? "bg-emerald-950/60 border-emerald-800 text-emerald-300"
+                      : "bg-rose-950/60 border-rose-800 text-rose-300"
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {status === "success" ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                      )}
+                      <span>{statusMessage}</span>
+                    </div>
+
+                    {invoicePr && isQrOpen && (
+                      <button
+                        type="button"
+                        onClick={() => setIsQrOpen(true)}
+                        className="underline font-bold text-emerald-400 hover:text-emerald-300 text-xs shrink-0 flex items-center gap-1 cursor-pointer"
+                      >
+                        <QrCode className="w-3.5 h-3.5" /> Pay Invoice
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   disabled={isProcessing}
@@ -550,18 +646,113 @@ export default function LightningZapCard({
                   {isProcessing ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
-                      <span>Broadcasting NutZap to Nostr...</span>
+                      <span>Processing eCash Mint & NutZap...</span>
                     </>
                   ) : (
                     <>
-                      <Coins className="w-5 h-5 fill-slate-950" />
-                      <span>Send {verifiedCashuAmount.toLocaleString()} Sats (NutZap)</span>
+                      <Sparkles className="w-5 h-5 fill-slate-950" />
+                      <span>Mint & Send {sats.toLocaleString()} Sats NutZap</span>
                     </>
                   )}
                 </button>
-              )}
-            </div>
-          </form>
+              </form>
+            )}
+
+            {/* SUBMODE 2: PASTE EXISTING TOKEN */}
+            {cashuMode === "paste" && (
+              <form onSubmit={handleSendPastedCashuNutZap} className="space-y-6">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      Paste Cashu Token (cashuA... or cashuB...)
+                    </label>
+                    {verifiedCashuAmount && (
+                      <span className="text-xs font-black text-emerald-400 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" /> {verifiedCashuAmount.toLocaleString()} Sats Verified
+                      </span>
+                    )}
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={cashuTokenInput}
+                    onChange={(e) => {
+                      setCashuTokenInput(e.target.value);
+                      setVerifiedCashuAmount(null);
+                    }}
+                    placeholder="cashuAeyJ0b2tlbiI6W3sibWludCI6Imh0dHBzOi8vbWludC5taW5pYml0cy5jYXNoL0JpdGNvaW4iLCJwcm9vZnMiOlt7ImFtb3VudCI6MTAwLCJpZCI6... "
+                    className="w-full bg-slate-800 border border-slate-700 rounded-2xl p-3.5 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 transition-colors text-xs font-mono break-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                    Optional Encrypted Memo (NIP-44)
+                  </label>
+                  <input
+                    type="text"
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder="Private eCash tip! 🥜"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 transition-colors text-sm"
+                  />
+                </div>
+
+                {statusMessage && (
+                  <div className={`p-4 rounded-2xl text-xs flex items-center justify-between gap-2.5 border ${
+                    status === "success" 
+                      ? "bg-emerald-950/60 border-emerald-800 text-emerald-300"
+                      : "bg-rose-950/60 border-rose-800 text-rose-300"
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {status === "success" ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                      )}
+                      <span>{statusMessage}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  {!verifiedCashuAmount ? (
+                    <button
+                      type="button"
+                      onClick={handleVerifyCashuToken}
+                      disabled={isProcessing || !cashuTokenInput.trim()}
+                      className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50 cursor-pointer"
+                    >
+                      {isProcessing ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                      )}
+                      <span>Verify eCash Token</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={isProcessing}
+                      className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 text-base disabled:opacity-50 cursor-pointer"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span>Broadcasting NutZap to Nostr...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Coins className="w-5 h-5 fill-slate-950" />
+                          <span>Send {verifiedCashuAmount.toLocaleString()} Sats (NutZap)</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </form>
+            )}
+
+          </div>
         )}
 
         {/* Footer info */}
@@ -585,13 +776,13 @@ export default function LightningZapCard({
         </div>
       </div>
 
-      {/* POPUP MODAL QR CODE CHO LIGHTNING */}
+      {/* POPUP MODAL QR CODE (Dùng chung cho cả Lightning Zap và Cashu Mint Quote) */}
       <ZapQrModal
         isOpen={isQrOpen}
         onClose={() => setIsQrOpen(false)}
         invoicePr={invoicePr}
         amountSats={sats}
-        recipientName={name}
+        recipientName={activeTab === "lightning" ? name : "Minibits Cashu Mint"}
         zapEvent={zapEventPayload}
       />
     </>

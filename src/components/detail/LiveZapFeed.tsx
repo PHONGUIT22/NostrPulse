@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Zap, Radio, Sparkles, Clock, MessageSquare, ShieldCheck, Activity } from "lucide-react";
+import { nip19 } from "nostr-tools";
 
 interface ZapReceipt {
   id: string;
@@ -70,7 +71,17 @@ export default function LiveZapFeed({ pubkey, name }: Props) {
               // Bóc tách NIP-57 Zap Request (Kind 9734) lồng bên trong tag "description"
               let amountSats = 21;
               let comment = "Value-4-Value Zap ⚡";
-              let sender = zapEvent.pubkey ? `npub1${zapEvent.pubkey.slice(0, 6)}...` : "Anonymous";
+              
+              // Mã hóa Bech32 chuẩn cho pubkey của Zap Receipt
+              let sender = "Anonymous";
+              if (zapEvent.pubkey) {
+                try {
+                  const encodedNpub = nip19.npubEncode(zapEvent.pubkey);
+                  sender = `${encodedNpub.slice(0, 10)}...${encodedNpub.slice(-4)}`;
+                } catch {
+                  sender = `anon_${zapEvent.pubkey.slice(0, 6)}`;
+                }
+              }
 
               const descTag = zapEvent.tags?.find((t: any) => t[0] === "description");
               if (descTag && descTag[1]) {
@@ -81,8 +92,15 @@ export default function LiveZapFeed({ pubkey, name }: Props) {
                   if (amtTag && amtTag[1]) {
                     amountSats = Math.round(Number(amtTag[1]) / 1000);
                   }
+                  
+                  // Mã hóa Bech32 chuẩn cho người gửi thực sự (từ Kind 9734)
                   if (zapRequest.pubkey) {
-                    sender = `anon_${zapRequest.pubkey.slice(0, 6)}`;
+                    try {
+                      const senderNpub = nip19.npubEncode(zapRequest.pubkey);
+                      sender = `${senderNpub.slice(0, 10)}...${senderNpub.slice(-4)}`;
+                    } catch {
+                      sender = `anon_${zapRequest.pubkey.slice(0, 6)}`;
+                    }
                   }
                 } catch {}
               }
@@ -195,7 +213,7 @@ export default function LiveZapFeed({ pubkey, name }: Props) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-xs text-slate-200 truncate">
+                    <span className="font-bold text-xs text-slate-200 truncate font-mono">
                       {item.senderName}
                     </span>
                     <span className="text-[10px] text-slate-500 flex items-center gap-1 font-mono">

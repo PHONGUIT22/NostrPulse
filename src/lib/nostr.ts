@@ -203,3 +203,56 @@ export async function fetchNostrProfile(npubOrHex: string): Promise<NostrProfile
 
   return null;
 }
+// Thêm vào cuối file src/lib/nostr.ts
+
+export interface NostrNote {
+  id: string;
+  pubkey: string;
+  content: string;
+  created_at: number;
+  tags: string[][];
+}
+
+/**
+ * Kéo 3-5 bài viết mới nhất (Kind 1 - Short Text Note) từ Relay Pool
+ */
+export async function fetchRecentNotes(npubOrHex: string, limit: number = 5): Promise<NostrNote[]> {
+  const { hex: hexPubkey } = normalizeToHex(npubOrHex);
+  if (!hexPubkey || !/^[0-9a-fA-F]{64}$/.test(hexPubkey)) return [];
+
+  const pool = new SimplePool();
+
+  try {
+    const timeoutPromise = new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3500));
+    
+    // Gửi truy vấn querySync tới các Relays
+    const queryPromise = pool.querySync(DEFAULT_RELAYS, {
+      kinds: [1],
+      authors: [hexPubkey],
+      limit: limit * 2, // Kéo dôi ra để lọc
+    });
+
+    const events = await Promise.race([queryPromise, timeoutPromise]);
+
+    if (!Array.isArray(events) || events.length === 0) return [];
+
+    // Lọc và sắp xếp bài đăng mới nhất
+    return events
+      .sort((a, b) => b.created_at - a.created_at)
+      .slice(0, limit)
+      .map((e) => ({
+        id: e.id,
+        pubkey: e.pubkey,
+        content: e.content,
+        created_at: e.created_at,
+        tags: e.tags,
+      }));
+  } catch (err) {
+    console.warn("Failed to fetch creator notes:", err);
+    return [];
+  } finally {
+    try {
+      pool.close(DEFAULT_RELAYS);
+    } catch {}
+  }
+}

@@ -1,6 +1,11 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { fetchNostrProfile, normalizeToHex, NostrProfile } from "@/lib/nostr";
+import { 
+  fetchNostrProfile, 
+  normalizeToHex, 
+  NostrProfile, 
+  fetchRecentNotes 
+} from "@/lib/nostr";
 import { verifyNip05 } from "@/lib/nip05";
 import { calculateTrustScore } from "@/lib/trust-score";
 import LightningZapCard from "@/components/detail/LightningZapCard";
@@ -10,6 +15,7 @@ import SuggestedCreators from "@/components/detail/SuggestedCreators";
 import LiveZapFeed from "@/components/detail/LiveZapFeed";
 import Breadcrumb from "@/components/detail/Breadcrumb";
 import UserAvatar from "@/components/ui/UserAvatar";
+import CreatorNotesFeed from "@/components/detail/CreatorNotesFeed";
 import { 
   Zap, 
   ShieldCheck, 
@@ -48,16 +54,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-// 2. MAIN COMPONENT TRANG PROFILE CREATOR (CHỐNG LỖI 404 CHO NICK MỚI)
+// 2. MAIN COMPONENT TRANG PROFILE CREATOR
 export default async function CreatorProfilePage({ params }: PageProps) {
   const resolvedParams = await params;
   const rawNpub = decodeURIComponent(resolvedParams.npub);
   const { hex: hexPubkey, npub: encodedNpub } = normalizeToHex(rawNpub);
 
-  // Kéo dữ liệu từ Relay
-  const rawProfile = await fetchNostrProfile(rawNpub);
+  // KÉO ĐỒNG THỜI PROFILE VÀ 4 BÀI POST (KIND 1) MỚI NHẤT TỪ RELAY POOL
+  const [rawProfile, recentNotes] = await Promise.all([
+    fetchNostrProfile(rawNpub),
+    fetchRecentNotes(rawNpub, 4),
+  ]);
 
-  // 🔥 TỰ ĐỘNG SINH PROFILE CHO KHÓA MỚI TOANH (KHÔNG BAO GIỜ BỊ 404) 🔥
+  // TỰ ĐỘNG SINH PROFILE CHO KHÓA MỚI TOANH (KHÔNG BAO GIỜ BỊ 404)
   const profile: NostrProfile = rawProfile || {
     pubkey: hexPubkey,
     npub: encodedNpub,
@@ -79,7 +88,7 @@ export default async function CreatorProfilePage({ params }: PageProps) {
 
   // 2. Tính điểm Trust Score dựa trên dữ liệu thực
   const trustData = calculateTrustScore(profile, nip05Result);
-
+  
   return (
     <div className="min-h-screen bg-[#FDFDFD] text-slate-900 pb-20">
       
@@ -159,7 +168,7 @@ export default async function CreatorProfilePage({ params }: PageProps) {
                 </div>
               </div>
             </div>
-
+            
             {/* CỘT PHẢI: TRUST SCORE BADGE + LIGHTNING ADDRESS */}
             <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto shrink-0">
               <TrustScoreBadge score={trustData.score} tier={trustData.tier} />
@@ -209,18 +218,29 @@ export default async function CreatorProfilePage({ params }: PageProps) {
           )}
         </div>
 
-        {/* NỘI DUNG CHÍNH */}
+        {/* NỘI DUNG CHÍNH (2 CỘT) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
           
           {/* CỘT CHÍNH */}
           <div className="lg:col-span-2 space-y-8">
-            <TrustScoreCard trustData={trustData} name={displayName} />
+            {/* 1. Bảng Đánh Giá Điểm Tín Nhiệm Trust Score */}
+            <TrustScoreCard trustData={trustData} name={displayName} npub={encodedNpub} />
+            
+            {/* 2. Thẻ Thanh Toán Lightning & Cashu eCash */}
             <LightningZapCard
               npub={encodedNpub}
               lud16={lud16}
               name={displayName}
               pubkey={profile.pubkey}
             />
+
+            {/* 3. 🔥 BẢNG HIỂN THỊ CÁC BÀI POST NOSTR MỚI NHẤT (KIND 1) 🔥 */}
+            <CreatorNotesFeed 
+              notes={recentNotes} 
+              creatorName={displayName} 
+            />
+
+            {/* 4. Dòng thời gian Zaps trực tiếp */}
             <LiveZapFeed 
               pubkey={profile.pubkey} 
               name={displayName} 
