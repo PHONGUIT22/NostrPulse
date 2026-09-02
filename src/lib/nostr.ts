@@ -178,36 +178,42 @@ export async function fetchNostrProfile(npubOrHex: string, customRelays?: string
   const targetRelays = mergeRelays(customRelays, DEFAULT_RELAYS);
   const pool = new SimplePool();
 
-  // --- ƯU TIÊN 1: QUERY TRỰC TIẾP TỪ MẠNG LƯỚI WEBSOCKET RELAYS (P2P FOSS) ---
+  // --- ƯU TIÊN 1: QUERY TẤT CẢ RELAYS & LỌC EVENT KIND 0 MỚI NHẤT ---
   try {
-    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
+    const timeoutPromise = new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 2500));
 
-    const fetchPromise = pool.get(targetRelays, {
+    // Dùng querySync để gom toàn bộ event Kind 0 từ các relay về
+    const fetchPromise = pool.querySync(targetRelays, {
       kinds: [0],
       authors: [hexPubkey],
     });
 
-    const event = await Promise.race([fetchPromise, timeoutPromise]);
+    const events = await Promise.race([fetchPromise, timeoutPromise]);
 
-    if (event && event.content) {
-      try {
-        const metadata = JSON.parse(event.content);
-        return {
-          pubkey: hexPubkey,
-          npub: encodedNpub,
-          name: metadata.name,
-          displayName: metadata.display_name || metadata.displayName || metadata.name,
-          about: metadata.about || metadata.bio,
-          picture: metadata.picture || metadata.image,
-          banner: metadata.banner,
-          nip05: metadata.nip05,
-          lud16: metadata.lud16 || metadata.lud06,
-          website: metadata.website,
-          created_at: event.created_at,
-          relays_connected: targetRelays.length,
-        };
-      } catch (parseErr) {
-        console.warn("Malformed JSON in kind:0 profile event:", parseErr);
+    if (Array.isArray(events) && events.length > 0) {
+      // Sắp xếp giảm dần theo created_at để luôn lấy bản ghi mới nhất vừa cập nhật
+      const latestEvent = events.sort((a, b) => b.created_at - a.created_at)[0];
+
+      if (latestEvent && latestEvent.content) {
+        try {
+          const metadata = JSON.parse(latestEvent.content);
+          return {
+            pubkey: hexPubkey,
+            npub: encodedNpub,
+            name: metadata.name,
+            displayName: metadata.display_name || metadata.displayName || metadata.name,
+            about: metadata.about || metadata.bio,
+            picture: metadata.picture || metadata.image,
+            banner: metadata.banner,
+            nip05: metadata.nip05,
+            lud16: metadata.lud16 || metadata.lud06,
+            website: metadata.website,
+            created_at: latestEvent.created_at,
+            relays_connected: targetRelays.length,
+          };
+        } catch (parseErr) {
+          console.warn("Malformed JSON in kind:0 profile event:", parseErr);
+        }
       }
     }
   } catch (err) {
@@ -218,13 +224,13 @@ export async function fetchNostrProfile(npubOrHex: string, customRelays?: string
     } catch {}
   }
 
-  // --- ƯU TIÊN 2: DỰ PHÒNG CACHE PRIMAL NẾU RELAY NGHẼN MẠNG ---
+  // --- ƯU TIÊN 2: DỰ PHÒNG TỪ PRIMAL API (TẮT CACHE HOÀN TOÀN) ---
   try {
     const resPrimal = await fetch("https://primal.net/api", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(["user_profile", { pubkey: hexPubkey }]),
-      next: { revalidate: 3600 },
+      cache: "no-store", // Ép luôn lấy dữ liệu mới nhất, không lưu cache cũ
       signal: AbortSignal.timeout(2000),
     });
 
