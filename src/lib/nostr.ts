@@ -3,7 +3,7 @@ import { nip19 } from "nostr-tools";
 import { SimplePool } from "nostr-tools/pool";
 import { FEATURED_CREATORS } from "@/lib/creators";
 
-// 6 Public Relays lớn nhất thế giới kết nối dự phòng
+// Top public Nostr relays for high-availability fallback
 export const DEFAULT_RELAYS = [
   "wss://relay.damus.io",
   "wss://nos.lol",
@@ -38,7 +38,7 @@ export interface NostrNote {
 }
 
 /**
- * Chuẩn hóa URL Relay (loại bỏ dấu gạch chéo thừa, thêm wss:// nếu thiếu)
+ * Normalizes relay URL (strips trailing slashes, prepends wss:// if missing)
  */
 export function normalizeRelayUrl(url: string): string {
   let clean = url.trim().replace(/\/+$/, "");
@@ -49,7 +49,7 @@ export function normalizeRelayUrl(url: string): string {
 }
 
 /**
- * Gộp và lọc trùng lặp danh sách Relay (Deduplicate & Sanitize)
+ * Deduplicates and sanitizes relay list
  */
 export function mergeRelays(primary: string[] = [], fallback: string[] = DEFAULT_RELAYS): string[] {
   const set = new Set<string>();
@@ -64,19 +64,19 @@ export function mergeRelays(primary: string[] = [], fallback: string[] = DEFAULT
 }
 
 /**
- * Hàm chuyển đổi Uint8Array sang chuỗi Hex thuần túy
+ * Converts Uint8Array to pure hex string
  */
 export function bytesToHex(bytes: Uint8Array | number[]): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 /**
- * 1. Chuyển đổi an toàn giữa npub, nprofile và Hex Pubkey 64 ký tự (Zero-Crash)
+ * 1. Safe conversion between npub, nprofile, and 64-char Hex Pubkey
  */
 export function normalizeToHex(input: string): { hex: string; npub: string } {
   const clean = input.trim();
 
-  // 1.1 Giải mã nếu là npub1...
+  // 1.1 Decode if npub1...
   if (clean.startsWith("npub1")) {
     try {
       const decoded = nip19.decode(clean);
@@ -89,7 +89,7 @@ export function normalizeToHex(input: string): { hex: string; npub: string } {
     } catch {}
   }
 
-  // 1.2 Hỗ trợ thêm mã nprofile1...
+  // 1.2 Support nprofile1...
   if (clean.startsWith("nprofile1")) {
     try {
       const decoded = nip19.decode(clean);
@@ -100,7 +100,7 @@ export function normalizeToHex(input: string): { hex: string; npub: string } {
     } catch {}
   }
 
-  // 1.3 Nếu là chuỗi Hex 64 ký tự hợp lệ
+  // 1.3 If valid 64-character hex string
   if (/^[0-9a-fA-F]{64}$/.test(clean)) {
     try {
       return {
@@ -110,7 +110,7 @@ export function normalizeToHex(input: string): { hex: string; npub: string } {
     } catch {}
   }
 
-  // 1.4 Khớp với danh sách Creator có sẵn (Handle / NPUB)
+  // 1.4 Match with featured creator list (Handle / NPUB)
   const match = FEATURED_CREATORS.find(
     (c) =>
       c.npub === clean ||
@@ -126,7 +126,7 @@ export function normalizeToHex(input: string): { hex: string; npub: string } {
 }
 
 /**
- * 🔥 2. TẢI DANH SÁCH RELAY CÁ NHÂN CỦA USER (CHUẨN NIP-65 / KIND 10002) 🔥
+ * 2. Fetches user's personal relay list (NIP-65 Kind 10002)
  */
 export async function fetchUserRelays(pubkeyOrNpub: string): Promise<string[]> {
   const { hex: hexPubkey } = normalizeToHex(pubkeyOrNpub);
@@ -171,18 +171,18 @@ export async function fetchUserRelays(pubkeyOrNpub: string): Promise<string[]> {
 }
 
 /**
- * 3. KÉO PROFILE TRỰC TIẾP TỪ NOSTR WEBSOCKET RELAY POOL (CHUẨN P2P 100%)
+ * 3. Fetches profile directly from Nostr WebSocket relay pool (P2P)
  */
 export async function fetchNostrProfile(npubOrHex: string, customRelays?: string[]): Promise<NostrProfile | null> {
   const { hex: hexPubkey, npub: encodedNpub } = normalizeToHex(npubOrHex);
   const targetRelays = mergeRelays(customRelays, DEFAULT_RELAYS);
   const pool = new SimplePool();
 
-  // --- ƯU TIÊN 1: QUERY TẤT CẢ RELAYS & LỌC EVENT KIND 0 MỚI NHẤT ---
+  // --- Priority 1: Query all relays & get latest Kind 0 event ---
   try {
     const timeoutPromise = new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 2500));
 
-    // Dùng querySync để gom toàn bộ event Kind 0 từ các relay về
+    // Query all Kind 0 events across connected relays
     const fetchPromise = pool.querySync(targetRelays, {
       kinds: [0],
       authors: [hexPubkey],
@@ -191,7 +191,7 @@ export async function fetchNostrProfile(npubOrHex: string, customRelays?: string
     const events = await Promise.race([fetchPromise, timeoutPromise]);
 
     if (Array.isArray(events) && events.length > 0) {
-      // Sắp xếp giảm dần theo created_at để luôn lấy bản ghi mới nhất vừa cập nhật
+      // Sort descending by created_at to always pick the newest record
       const latestEvent = events.sort((a, b) => b.created_at - a.created_at)[0];
 
       if (latestEvent && latestEvent.content) {
@@ -224,13 +224,13 @@ export async function fetchNostrProfile(npubOrHex: string, customRelays?: string
     } catch {}
   }
 
-  // --- ƯU TIÊN 2: DỰ PHÒNG TỪ PRIMAL API (TẮT CACHE HOÀN TOÀN) ---
+  // --- Priority 2: Fallback from Primal API (cache disabled) ---
   try {
     const resPrimal = await fetch("https://primal.net/api", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(["user_profile", { pubkey: hexPubkey }]),
-      cache: "no-store", // Ép luôn lấy dữ liệu mới nhất, không lưu cache cũ
+      cache: "no-store", // Force fresh data fetch, no caching
       signal: AbortSignal.timeout(2000),
     });
 
@@ -261,7 +261,7 @@ export async function fetchNostrProfile(npubOrHex: string, customRelays?: string
     }
   } catch {}
 
-  // --- ƯU TIÊN 3: DỰ PHÒNG TỪ DANH SÁCH LOCAL CACHE ---
+  // --- Priority 3: Fallback to local cache list ---
   const matched = FEATURED_CREATORS.find(
     (c) => c.npub === encodedNpub || c.pubkey?.toLowerCase() === hexPubkey.toLowerCase()
   );
@@ -285,7 +285,7 @@ export async function fetchNostrProfile(npubOrHex: string, customRelays?: string
 }
 
 /**
- * 4. KÉO BÀI VIẾT MỚI NHẤT (KIND 1) TỪ RELAYS
+ * 4. Fetches latest notes (Kind 1) from relays
  */
 export async function fetchRecentNotes(npubOrHex: string, limit: number = 5, customRelays?: string[]): Promise<NostrNote[]> {
   const { hex: hexPubkey } = normalizeToHex(npubOrHex);

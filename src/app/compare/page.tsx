@@ -22,29 +22,29 @@ export default function CompareHubPage() {
   const router = useRouter();
   const creators = FEATURED_CREATORS;
 
-  // State chọn creator A & B (mặc định lấy 2 người đầu tiên)
+  // Selected creators A & B (defaults to first two)
   const [selectedNpubA, setSelectedNpubA] = useState<string>(creators[0]?.npub || "");
   const [selectedNpubB, setSelectedNpubB] = useState<string>(creators[1]?.npub || "");
 
-  // Tìm object creator để hiển thị avatar xem trước
+  // Find creator object for avatar preview
   const creatorA = creators.find((c) => c.npub === selectedNpubA) || creators[0];
   const creatorB = creators.find((c) => c.npub === selectedNpubB) || creators[1];
 
-  // Xử lý chuyển hướng so sánh
+  // Handle comparison navigation
   const handleCompare = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedNpubA || !selectedNpubB) return;
     router.push(`/compare/${encodeURIComponent(selectedNpubA)}-vs-${encodeURIComponent(selectedNpubB)}`);
   };
 
-  // Nút đổi chỗ 2 người
+  // Swap creators handler
   const handleSwap = () => {
     const temp = selectedNpubA;
     setSelectedNpubA(selectedNpubB);
     setSelectedNpubB(temp);
   };
 
-  // Danh sách các cặp so sánh kinh điển có sẵn
+  // Featured comparison pairs
   const POPULAR_MATCHUPS = [
     {
       c1: creators[0] || { name: "fiatjaf", handle: "fiatjaf", npub: "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6" },
@@ -82,12 +82,12 @@ export default function CompareHubPage() {
             Select two Nostr creators to evaluate their <strong>Identity Trust Scores</strong>, NIP-05 DNS verifications, Lightning Zap addresses, and network reputations side-by-side.
           </p>
 
-          {/* 🔥 BỘ CHỌN CREATOR 2 BÊN TRỰC QUAN 🔥 */}
+          {/* Dual-side creator selector */}
           <form onSubmit={handleCompare} className="bg-slate-800/90 p-6 sm:p-8 rounded-3xl border border-slate-700 shadow-2xl max-w-4xl mx-auto space-y-6">
             
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
               
-              {/* Ô CHỌN CREATOR A */}
+              {/* Creator A selector */}
               <div className="md:col-span-2 bg-slate-900 p-4 rounded-2xl border border-slate-700 text-left space-y-3">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400 block">
                   Select Creator A
@@ -120,7 +120,7 @@ export default function CompareHubPage() {
                 </select>
               </div>
 
-              {/* NÚT SWAP (HOÁN ĐỔI) Ở GIỮA */}
+              {/* Middle swap button */}
               <div className="flex justify-center md:col-span-1">
                 <button
                   type="button"
@@ -132,7 +132,7 @@ export default function CompareHubPage() {
                 </button>
               </div>
 
-              {/* Ô CHỌN CREATOR B */}
+              {/* Creator B selector */}
               <div className="md:col-span-2 bg-slate-900 p-4 rounded-2xl border border-slate-700 text-left space-y-3">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 block">
                   Select Creator B
@@ -167,7 +167,7 @@ export default function CompareHubPage() {
 
             </div>
 
-            {/* NÚT BẮT ĐẦU SO SÁNH */}
+            {/* Compare action button */}
             <button
               type="submit"
               className="w-full bg-gradient-to-r from-purple-600 to-amber-500 hover:from-purple-500 hover:to-amber-400 text-slate-950 font-black py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-2 text-base cursor-pointer"
@@ -181,7 +181,7 @@ export default function CompareHubPage() {
         </div>
       </section>
 
-      {/* DANH SÁCH CÁC CẶP SO SÁNH KINH ĐIỂN */}
+      {/* Classic comparison pairs */}
       <div className="max-w-5xl mx-auto px-4 -mt-8 relative z-20">
         
         <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-sm mb-12">
@@ -232,7 +232,7 @@ export default function CompareHubPage() {
           </div>
         </div>
 
-        {/* 3 TIÊU CHÍ CỐT LÕI KHI SO SÁNH */}
+        {/* Core comparison criteria */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           
           <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-2">

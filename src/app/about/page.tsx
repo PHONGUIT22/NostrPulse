@@ -125,7 +125,7 @@ export default function AboutPage() {
                 NostrPulse was built to provide transparent, real-time analytics for the growing decentralized social media ecosystem and Bitcoin Lightning economy. As a software and data engineer passionate about permissionless protocols and open-source infrastructure, I developed NostrPulse to empower creators with verifiable social metrics, relay monitoring, and seamless Value-4-Value Lightning tipping.
               </p>
               
-              {/* LIÊN KẾT MẠNG XÃ HỘI CHUẨN EEAT */}
+              {/* EEAT social links */}
               <div className="flex items-center gap-3 text-xs font-bold flex-wrap">
                 <a 
                   href="https://github.com/KoVN-s" 

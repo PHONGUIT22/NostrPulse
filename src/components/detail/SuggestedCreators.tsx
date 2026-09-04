@@ -9,7 +9,7 @@ interface Props {
 export default async function RelatedSectors({ currentNpub }: Props) {
   const creatorList = await getLiveTopCreators(10);
 
-  // Lọc bỏ creator hiện tại đang xem
+  // Exclude currently viewed creator
   const suggestions = creatorList
     .filter((c) => c.npub !== currentNpub)
     .slice(0, 4);

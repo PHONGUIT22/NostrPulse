@@ -19,7 +19,7 @@ export default function UserAvatar({
 }: UserAvatarProps) {
   const [hasError, setHasError] = useState(false);
 
-  // Kích thước linh hoạt cho từng vị trí
+  // Dynamic size map for placements
   const sizeMap = {
     sm: "w-8 h-8 text-xs",
     md: "w-10 h-10 text-sm",
@@ -27,7 +27,7 @@ export default function UserAvatar({
     xl: "w-24 h-24 sm:w-28 sm:h-28 text-3xl",
   };
 
-  // Avatar dự phòng tạo ngẫu nhiên theo npub/tên (không bao giờ lỗi)
+  // Deterministic fallback avatar based on npub/name
   const fallbackSvg = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(
     npub || name
   )}`;
@@ -42,7 +42,7 @@ export default function UserAvatar({
           alt={name}
           className="w-full h-full object-cover"
           onError={(e) => {
-            // Nếu Dicebear cũng nghẽn mạng thì hiện chữ cái đầu
+            // Fallback to initial letter if avatar service fails
             (e.target as HTMLElement).style.display = "none";
           }}
         />

@@ -31,7 +31,7 @@ export default function Navbar() {
     <header className="border-b border-slate-200/80 bg-white/90 backdrop-blur-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
         
-        {/* LOGO GÓC TRÁI: NOSTRPULSE */}
+        {/* Left logo: NostrPulse */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
           <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center text-white shadow-sm">
             <Zap className="w-5 h-5 fill-white" />
@@ -62,7 +62,7 @@ export default function Navbar() {
           </div>
         </form>
 
-        {/* LINKS GÓC PHẢI & NÚT LOGIN NIP-07 */}
+        {/* Right navigation links & NIP-07 login */}
         <div className="flex items-center gap-3 shrink-0">
           <nav className="hidden lg:flex items-center gap-6 font-medium text-slate-600 text-sm mr-2">
             <Link href="/relays" className="hover:text-slate-900 transition-colors">
@@ -81,7 +81,7 @@ export default function Navbar() {
             <span className="hidden sm:inline">Compare</span>
           </Link>
 
-          {/* 🔥 NÚT ĐĂNG NHẬP NIP-07 CHUYÊN NGHIỆP 🔥 */}
+          {/* NIP-07 Login button */}
           <NostrLoginButton />
         </div>
 

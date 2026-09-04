@@ -23,7 +23,7 @@ export default function VersusTable({ dataA, dataB }: Props) {
   const nameA = dataA.displayName || dataA.name || "Creator A";
   const nameB = dataB.displayName || dataB.name || "Creator B";
 
-  // 🔥 TÍNH ĐIỂM TRUST SCORE CHO CẢ 2 BÊN (HẾT LỖI TS2554) 🔥
+  // Compute Trust Scores for both profiles
   const trustA = calculateTrustScore(dataA);
   const trustB = calculateTrustScore(dataB);
 
@@ -37,7 +37,7 @@ export default function VersusTable({ dataA, dataB }: Props) {
   return (
     <div className="space-y-8">
       
-      {/* CARD KẾT LUẬN DANH TÍNH */}
+      {/* Identity verdict summary card */}
       <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-md text-center">
         <div className="inline-flex items-center gap-1.5 text-purple-600 font-bold text-xs uppercase tracking-wider mb-2">
           <Award className="w-4 h-4" /> Reputation Verdict
@@ -57,10 +57,10 @@ export default function VersusTable({ dataA, dataB }: Props) {
         </p>
       </div>
 
-      {/* BẢNG SO SÁNH */}
+      {/* Comparison table */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
         
-        {/* HEADER BẢNG */}
+        {/* Table header */}
         <div className="grid grid-cols-3 bg-slate-900 text-white p-4 text-sm font-bold text-center items-center">
           <div className="text-left pl-4">Nostr Metric</div>
           <div className="text-purple-400 flex flex-col items-center gap-1">
@@ -85,10 +85,10 @@ export default function VersusTable({ dataA, dataB }: Props) {
           </div>
         </div>
 
-        {/* DÒNG CÁC CHỈ SỐ */}
+        {/* Metric rows */}
         <div className="divide-y divide-slate-100">
           
-          {/* 1. HÀNG IDENTITY TRUST SCORE */}
+          {/* 1. Identity Trust Score row */}
           <div className="grid grid-cols-3 p-4 sm:p-5 items-center text-center bg-purple-50/50 hover:bg-purple-50 transition-colors">
             <div className="flex items-center gap-2 font-black text-purple-950 text-xs sm:text-sm text-left pl-2">
               <Activity className="w-4 h-4 text-purple-600 shrink-0 hidden sm:inline" />

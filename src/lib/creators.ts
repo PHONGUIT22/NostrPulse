@@ -16,7 +16,7 @@ export interface Creator {
   lud16?: string;
 }
 
-// 1. Helper lấy Hex Pubkey từ npub an toàn
+// 1. Safe helper to derive Hex Pubkey from npub
 function extractHexPubkey(creator: Creator): string {
   if (creator.pubkey && /^[0-9a-fA-F]{64}$/.test(creator.pubkey)) {
     return creator.pubkey.toLowerCase();
@@ -30,7 +30,7 @@ function extractHexPubkey(creator: Creator): string {
   return "";
 }
 
-// 2. 🔥 KÉO STATS THẬT (KIND 10000105) TỪ PRIMAL API 🔥
+// 2. Fetch real stats (Kind 10000105) from Primal API
 async function fetchPrimalUserStats(hexPubkey: string): Promise<{ satsZapped: number; zapCount: number } | null> {
   if (!hexPubkey) return null;
 
@@ -39,15 +39,15 @@ async function fetchPrimalUserStats(hexPubkey: string): Promise<{ satsZapped: nu
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(["user_profile", { pubkey: hexPubkey }]),
-      next: { revalidate: 3600 }, // Cache 1 tiếng trên CDN
-      signal: AbortSignal.timeout(2000), // Timeout 2s chống lag
+      next: { revalidate: 3600 }, // Cache 1 hour on CDN
+      signal: AbortSignal.timeout(2000), // 2s timeout to prevent lag
     });
 
     if (!res.ok) return null;
     const events = await res.json();
 
     if (Array.isArray(events)) {
-      // Tìm event kind 10000105 chứa metrics on-chain của Primal
+      // Find kind 10000105 event containing Primal metrics
       const statsEvent = events.find((e: any) => e.kind === 10000105);
       if (statsEvent && statsEvent.content) {
         const stats = JSON.parse(statsEvent.content);
@@ -62,7 +62,7 @@ async function fetchPrimalUserStats(hexPubkey: string): Promise<{ satsZapped: nu
   return null;
 }
 
-// Mảng Creator cơ sở
+// Base featured creators array
 export const FEATURED_CREATORS: Creator[] = (importedCreators as Creator[]).map((c, index) => ({
   ...c,
   name: c.name?.startsWith("Nostr Creator #") ? `@${c.handle}` : c.name || `@${c.handle}`,
@@ -74,11 +74,11 @@ export const FEATURED_CREATORS: Creator[] = (importedCreators as Creator[]).map(
 
 export const CREATORS = FEATURED_CREATORS;
 
-// 3. 🔥 TỰ ĐỘNG GẮN ZAPS THẬT VÀO BẢNG XẾP HẠNG TOP CREATORS 🔥
+// 3. Attach real zaps to top creators leaderboard
 export async function getLiveTopCreators(limit = 10): Promise<Creator[]> {
   const baseList = FEATURED_CREATORS.slice(0, limit);
 
-  // Kéo song song stats của 10 creator trong 0.2s
+  // Fetch stats for 10 creators in parallel
   const resolved = await Promise.all(
     baseList.map(async (creator) => {
       const hex = extractHexPubkey(creator);
@@ -87,7 +87,7 @@ export async function getLiveTopCreators(limit = 10): Promise<Creator[]> {
       if (hex) {
         const stats = await fetchPrimalUserStats(hex);
         if (stats && stats.satsZapped > 0) {
-          // Quy đổi số nguyên sang format đẹp: 4500000 -> 4.5M Sats
+          // Format integer sats to compact notation: 4500000 -> 4.5M Sats
           realZapsStr = formatSats(stats.satsZapped);
         }
       }

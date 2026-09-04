@@ -27,14 +27,14 @@ import {
   Sparkles 
 } from "lucide-react";
 
-export const revalidate = 3600; // Cache 1 tiếng trên CDN
+export const revalidate = 3600; // Cache 1 hour on CDN
 export const dynamicParams = true;
 
 interface PageProps {
   params: Promise<{ npub: string }> | { npub: string };
 }
 
-// 1. TỰ ĐỘNG SINH METADATA SEO
+// 1. Dynamic SEO metadata generator
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const resolvedParams = await params;
   const rawNpub = decodeURIComponent(resolvedParams.npub);
@@ -60,13 +60,13 @@ export default async function CreatorProfilePage({ params }: PageProps) {
   const rawNpub = decodeURIComponent(resolvedParams.npub);
   const { hex: hexPubkey, npub: encodedNpub } = normalizeToHex(rawNpub);
 
-  // KÉO ĐỒNG THỜI PROFILE VÀ 4 BÀI POST (KIND 1) MỚI NHẤT TỪ RELAY POOL
+  // Fetch profile and latest 4 notes (Kind 1) from relay pool in parallel
   const [rawProfile, recentNotes] = await Promise.all([
     fetchNostrProfile(rawNpub),
     fetchRecentNotes(rawNpub, 4),
   ]);
 
-  // TỰ ĐỘNG SINH PROFILE CHO KHÓA MỚI TOANH (KHÔNG BAO GIỜ BỊ 404)
+  // Auto-generate fallback profile for fresh keys
   const profile: NostrProfile = rawProfile || {
     pubkey: hexPubkey,
     npub: encodedNpub,
@@ -83,16 +83,16 @@ export default async function CreatorProfilePage({ params }: PageProps) {
   const lud16 = profile.lud16 || profile.lud06 || "";
   const npubShort = `${encodedNpub.slice(0, 10)}...${encodedNpub.slice(-6)}`;
 
-  // 1. Xác thực chữ ký DNS NIP-05 thật
+  // 1. Cryptographic NIP-05 DNS verification
   const nip05Result = await verifyNip05(profile.nip05, profile.pubkey);
 
-  // 2. Tính điểm Trust Score dựa trên dữ liệu thực
+  // 2. Calculate Trust Score from verified data
   const trustData = calculateTrustScore(profile, nip05Result);
   
   return (
     <div className="min-h-screen bg-[#FDFDFD] text-slate-900 pb-20">
       
-      {/* ẢNH BÌA PROFILE (BANNER) */}
+      {/* Profile banner */}
       <div className="w-full h-48 sm:h-64 bg-slate-900 relative overflow-hidden">
         {profile.banner ? (
           <img
@@ -113,11 +113,11 @@ export default async function CreatorProfilePage({ params }: PageProps) {
           <Breadcrumb name={displayName} npub={encodedNpub} />
         </div>
 
-        {/* THẺ HEADER THÔNG TIN PROFILE */}
+        {/* Profile header card */}
         <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-sm mb-8">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 pb-6 border-b border-slate-100">
             
-            {/* CỘT TRÁI: AVATAR VÀ TÊN */}
+            {/* Left column: Avatar and Name */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
               <div className="relative">
                 <UserAvatar
@@ -142,7 +142,7 @@ export default async function CreatorProfilePage({ params }: PageProps) {
                     {displayName}
                   </h1>
                   
-                  {/* BADGE NIP-05: XANH NẾU XÁC THỰC THẬT, ĐỎ NẾU CHƯA XÁC THỰC */}
+                  {/* NIP-05 badge: verified vs unverified */}
                   {profile.nip05 && (
                     nip05Result.isVerified ? (
                       <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold px-2.5 py-0.5 rounded-full">
@@ -169,7 +169,7 @@ export default async function CreatorProfilePage({ params }: PageProps) {
               </div>
             </div>
             
-            {/* CỘT PHẢI: TRUST SCORE BADGE + LIGHTNING ADDRESS */}
+            {/* Right column: Trust Score badge + Lightning address */}
             <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto shrink-0">
               <TrustScoreBadge score={trustData.score} tier={trustData.tier} />
               
@@ -218,15 +218,15 @@ export default async function CreatorProfilePage({ params }: PageProps) {
           )}
         </div>
 
-        {/* NỘI DUNG CHÍNH (2 CỘT) */}
+        {/* Main content (2 columns) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
           
-          {/* CỘT CHÍNH */}
+          {/* Main column */}
           <div className="lg:col-span-2 space-y-8">
-            {/* 1. Bảng Đánh Giá Điểm Tín Nhiệm Trust Score */}
+            {/* 1. Trust Score assessment breakdown */}
             <TrustScoreCard trustData={trustData} name={displayName} npub={encodedNpub} />
             
-            {/* 2. Thẻ Thanh Toán Lightning & Cashu eCash */}
+            {/* 2. Lightning & Cashu eCash payment card */}
             <LightningZapCard
               npub={encodedNpub}
               lud16={lud16}
@@ -234,20 +234,20 @@ export default async function CreatorProfilePage({ params }: PageProps) {
               pubkey={profile.pubkey}
             />
 
-            {/* 3. 🔥 BẢNG HIỂN THỊ CÁC BÀI POST NOSTR MỚI NHẤT (KIND 1) 🔥 */}
+            {/* 3. Latest Nostr notes feed (Kind 1) */}
             <CreatorNotesFeed 
               notes={recentNotes} 
               creatorName={displayName} 
             />
 
-            {/* 4. Dòng thời gian Zaps trực tiếp */}
+            {/* 4. Live zaps feed */}
             <LiveZapFeed 
               pubkey={profile.pubkey} 
               name={displayName} 
             />
           </div>
 
-          {/* CỘT PHỤ (SIDEBAR) */}
+          {/* Sidebar column */}
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
               <div className="flex items-center gap-2 text-purple-600 font-bold text-xs uppercase tracking-wider mb-3">

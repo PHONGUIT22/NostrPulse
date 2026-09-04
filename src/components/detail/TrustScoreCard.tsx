@@ -16,14 +16,14 @@ export default function TrustScoreCard({ trustData, name, npub = "" }: Props) {
   const { score, tier, summary, breakdown } = trustData;
   const [isEmbedOpen, setIsEmbedOpen] = useState(false);
 
-  // Lấy npub từ prop hoặc trích xuất từ dữ liệu NIP-05
+  // Resolve npub from props or NIP-05 payload
   const targetNpub = npub || (trustData as any).npub || "";
 
   return (
     <>
       <div className="bg-slate-900 text-white p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-xl space-y-6">
         
-        {/* TIÊU ĐỀ + NÚT EMBED BADGE */}
+        {/* Header & embed badge trigger */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
           <div>
             <div className="inline-flex items-center gap-1.5 text-purple-400 font-bold text-xs uppercase tracking-wider mb-1">
@@ -32,7 +32,7 @@ export default function TrustScoreCard({ trustData, name, npub = "" }: Props) {
             <h3 className="text-2xl font-black">Nostr Identity Trust Score</h3>
           </div>
 
-          {/* 🔥 NÚT MỞ POPUP NHÚNG HUY HIỆU 🔥 */}
+          {/* Embed badge modal button */}
           <button
             type="button"
             onClick={() => setIsEmbedOpen(true)}
@@ -43,15 +43,15 @@ export default function TrustScoreCard({ trustData, name, npub = "" }: Props) {
           </button>
         </div>
 
-        {/* BỐ CỤC 2 CỘT: BÊN TRÁI LÀ BADGE VÒNG TRÒN - BÊN PHẢI LÀ TỔNG QUAN */}
+        {/* Two-column layout: circular badge & risk overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
           
-          {/* CỘT 1: CHIẾC BADGE VÒNG TRÒN NĂNG LƯỢNG */}
+          {/* Column 1: Circular badge */}
           <div className="md:col-span-1">
             <TrustScoreBadge score={score} tier={tier} />
           </div>
 
-          {/* CỘT 2: TỔNG QUAN ĐÁNH GIÁ RỦI RO */}
+          {/* Column 2: Risk overview */}
           <div className="md:col-span-2 space-y-4">
             <div className="p-4 bg-slate-950/70 rounded-2xl border border-slate-800">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
@@ -69,7 +69,7 @@ export default function TrustScoreCard({ trustData, name, npub = "" }: Props) {
 
         </div>
 
-        {/* 5 TIÊU CHÍ ĐÁNH GIÁ CHI TIẾT */}
+        {/* 5 Detailed evaluation criteria */}
         <div className="space-y-3 pt-2">
           <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
             Verification Signal Checklist
@@ -108,7 +108,7 @@ export default function TrustScoreCard({ trustData, name, npub = "" }: Props) {
 
       </div>
 
-      {/* POPUP MODAL NHÚNG HUY HIỆU */}
+      {/* Embed badge modal */}
       <EmbedBadgeModal
         isOpen={isEmbedOpen}
         onClose={() => setIsEmbedOpen(false)}

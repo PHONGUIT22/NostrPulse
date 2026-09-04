@@ -28,7 +28,7 @@ export default function TermsPage() {
             Welcome to <strong>NostrPulse</strong> (https://nostrpulse.com). By accessing or using our protocol analytics platform, relay directories, and profile comparison tools, you agree to comply with and be bound by the following Terms of Service.
           </p>
 
-          {/* KHỐI MIỄN TRỪ TRÁCH NHIỆM PROTOCOL */}
+          {/* Protocol disclaimer block */}
           <div className="bg-purple-50 p-5 rounded-2xl border border-purple-200 text-purple-950">
             <h2 className="text-base font-bold uppercase mb-2 flex items-center gap-2 text-purple-900">
               <Shield className="w-5 h-5 text-purple-600" /> 1. Non-Custodial & Open Protocol Disclaimer

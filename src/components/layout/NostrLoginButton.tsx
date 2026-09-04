@@ -29,7 +29,7 @@ export default function NostrLoginButton() {
     }
   }, []);
 
-  // 🔥 ĐĂNG NHẬP NIP-07 & ĐỒNG BỘ RELAY NIP-65 🔥
+  // NIP-07 Login & NIP-65 relay synchronization
   const handleNip07Login = async () => {
     setIsConnecting(true);
 
@@ -49,7 +49,7 @@ export default function NostrLoginButton() {
 
       const npub = nip19.npubEncode(hexPubkey.toLowerCase());
 
-      // 1. Lấy danh sách Relay từ chính Extension (NIP-07 getRelays)
+      // 1. Fetch relays from browser extension (NIP-07 getRelays)
       let extensionRelays: string[] = [];
       if (typeof nostr.getRelays === "function") {
         try {
@@ -60,11 +60,11 @@ export default function NostrLoginButton() {
         } catch {}
       }
 
-      // 2. Kéo danh sách Relay NIP-65 trên mạng lưới của Pubkey này
+      // 2. Query NIP-65 relay list on network for this pubkey
       const nip65Relays = await fetchUserRelays(hexPubkey);
       const userAllRelays = mergeRelays(extensionRelays, nip65Relays);
 
-      // 3. Lưu thông tin phiên đăng nhập & Relay list vào LocalStorage
+      // 3. Persist login session and relay list to LocalStorage
       localStorage.setItem("nostr_connected_npub", npub);
       localStorage.setItem("nostr_user_relays", JSON.stringify(userAllRelays));
       setUserNpub(npub);
@@ -125,7 +125,7 @@ export default function NostrLoginButton() {
         </button>
       )}
 
-      {/* Modal Cài Extension */}
+      {/* Extension installation modal */}
       {showInstallModal && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"

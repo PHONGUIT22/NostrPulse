@@ -2,15 +2,15 @@ import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 /**
- * Utility gộp Tailwind CSS classes an toàn (Chuẩn shadcn/ui)
+ * Safely merges Tailwind CSS classes (shadcn/ui standard)
  */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 /**
- * Hàm chuẩn hóa Slug cho URL trên toàn hệ thống
- * Xử lý sạch ký tự đặc biệt, dấu tiếng Việt, khoảng trắng thừa
+ * Normalizes system-wide URL slugs
+ * Strips special characters, diacritics, and redundant whitespace
  */
 export function slugify(text: string): string {
   if (!text) return "";
@@ -27,8 +27,8 @@ export function slugify(text: string): string {
 }
 
 /**
- * Rút gọn mã npub hoặc Hex Pubkey dài
- * Ví dụ: "npub1sg6plzptd64u62a978hep2k2u72xqvvd5299cvfd0rrxn5z5avqssae6r6m" -> "npub1sg6p...ae6r6m"
+ * Truncates long npub or Hex Pubkey strings
+ * Example: "npub1sg6plzptd64u62a978hep2k2u72xqvvd5299cvfd0rrxn5z5avqssae6r6m" -> "npub1sg6p...ae6r6m"
  */
 export function truncateKey(key: string, startLen = 8, endLen = 6): string {
   if (!key) return "";
@@ -37,8 +37,8 @@ export function truncateKey(key: string, startLen = 8, endLen = 6): string {
 }
 
 /**
- * Định dạng số lượng Satoshi / Zaps đẹp mắt
- * Ví dụ: 1200 -> "1.2k Sats", 4500000 -> "4.5M Sats"
+ * Formats Satoshi / Zap amounts with compact notation
+ * Example: 1200 -> "1.2k Sats", 4500000 -> "4.5M Sats"
  */
 export function formatSats(amount: number): string {
   if (!amount || isNaN(amount)) return "0 Sats";

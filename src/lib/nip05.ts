@@ -9,8 +9,8 @@ export interface Nip05Result {
 }
 
 /**
- * Xác thực NIP-05 Cryptographic DNS Signature thật 100%
- * Gọi đến https://<domain>/.well-known/nostr.json?name=<name>
+ * Cryptographic verification of NIP-05 DNS signature
+ * Fetches https://<domain>/.well-known/nostr.json?name=<name>
  */
 export async function verifyNip05(
   nip05: string | undefined,
@@ -37,7 +37,7 @@ export async function verifyNip05(
     
     const res = await fetch(url, {
       headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(2500), // Timeout 2.5s tránh treo web
+      signal: AbortSignal.timeout(2500), // 2.5s timeout to avoid hanging
       next: { revalidate: 3600 },
     });
 
@@ -54,7 +54,7 @@ export async function verifyNip05(
     const data = await res.json();
     const matchedPubkey = data?.names?.[name]?.toLowerCase();
 
-    // 🔥 SO KHỚP CHỮ KÝ PUBKEY TRONG DNS HOST 🔥
+    // Match pubkey signature in DNS host record
     if (matchedPubkey && matchedPubkey === pubkey.toLowerCase()) {
       return {
         isVerified: true,

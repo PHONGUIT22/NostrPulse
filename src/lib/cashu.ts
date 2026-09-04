@@ -11,7 +11,7 @@ export interface CashuMintOption {
   recommended?: boolean;
 }
 
-// Danh sách các Cashu Mint uy tín chính thức
+// List of official trusted Cashu Mints
 export const RECOMMENDED_MINTS: CashuMintOption[] = [
   {
     name: "Minibits Mint",
@@ -31,7 +31,7 @@ export const RECOMMENDED_MINTS: CashuMintOption[] = [
   },
 ];
 
-// Mint mặc định (Minibits)
+// Default Mint (Minibits)
 export const DEFAULT_CASHU_MINT = RECOMMENDED_MINTS[0].url;
 
 const RELAYS = [
@@ -57,14 +57,14 @@ export interface DecodedCashuInfo {
 }
 
 /**
- * Chuyển Uint8Array sang chuỗi Hex (chạy an toàn trên browser & NodeJS)
+ * Converts Uint8Array to a hex string (browser & Node.js safe)
  */
 function bytesToHex(bytes: Uint8Array | number[]): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 /**
- * Chuyển chuỗi Base64 / Base64URL sang Uint8Array
+ * Converts Base64 / Base64URL string to Uint8Array
  */
 function base64UrlToBytes(base64Url: string): Uint8Array {
   let base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
@@ -83,7 +83,7 @@ function base64UrlToBytes(base64Url: string): Uint8Array {
 }
 
 /**
- * Trình giải mã CBOR siêu nhẹ chuẩn RFC 8949 (Hỗ trợ giải mã token Cashu V4 cashuB không lỗi)
+ * Lightweight RFC 8949 CBOR decoder (supports error-free Cashu V4 cashuB token decoding)
  */
 function decodeCbor(bytes: Uint8Array): any {
   let offset = 0;
@@ -180,7 +180,7 @@ function decodeCbor(bytes: Uint8Array): any {
 }
 
 /**
- * Kiểm tra định dạng URL của Mint hợp lệ
+ * Validates that the Mint URL format is valid
  */
 export function isValidMintUrl(url: string): boolean {
   try {
@@ -192,7 +192,7 @@ export function isValidMintUrl(url: string): boolean {
 }
 
 /**
- * Hàm mã hóa token thành chuỗi chuẩn cashu
+ * Encodes token proofs into a standard cashu token string
  */
 export function encodeCashuToken(mintUrl: string, proofs: CashuProof[], unit = "sat"): string {
   const cleanMint = mintUrl.trim().replace(/\/+$/, "");
@@ -216,13 +216,13 @@ export function encodeCashuToken(mintUrl: string, proofs: CashuProof[], unit = "
 }
 
 /**
- * Hàm giải mã chuỗi Cashu Token (Hỗ trợ hoàn hảo cả cashuA - V3 và cashuB - V4 CBOR)
+ * Decodes Cashu token strings (supports both cashuA V3 and cashuB V4 CBOR formats)
  */
 function decodeCashuString(tokenString: string): any {
   const trimmed = tokenString.trim();
   const lower = trimmed.toLowerCase();
 
-  // 1. Giải mã token đời mới cashuB (V4 CBOR format)
+  // 1. Decode modern cashuB token (V4 CBOR format)
   if (lower.startsWith("cashub")) {
     try {
       const rawCbor = trimmed.slice(6);
@@ -233,7 +233,7 @@ function decodeCashuString(tokenString: string): any {
     }
   }
 
-  // 2. Giải mã token cashuA (V3 Base64 JSON format)
+  // 2. Decode legacy cashuA token (V3 Base64 JSON format)
   if (lower.startsWith("cashua")) {
     try {
       const base64Data = trimmed.slice(6).replace(/-/g, "+").replace(/_/g, "/");
@@ -251,7 +251,7 @@ function decodeCashuString(tokenString: string): any {
 }
 
 /**
- * 1. Trích xuất Satoshis từ Token (Hỗ trợ V3 JSON và V4 NUT-00 CBOR Map)
+ * 1. Extracts Satoshi balance and proofs from Token (supports V3 JSON and V4 NUT-00 CBOR Map)
  */
 export function parseCashuToken(tokenString: string): DecodedCashuInfo {
   const trimmed = tokenString.trim();
@@ -270,7 +270,7 @@ export function parseCashuToken(tokenString: string): DecodedCashuInfo {
   let proofs: CashuProof[] = [];
   let unit = decoded.unit || decoded.u || "sat";
 
-  // Nhánh 1: Cấu trúc V4 Raw CBOR theo spec NUT-00 (m, u, t -> i, p -> a, s, c)
+  // Branch 1: V4 Raw CBOR structure per NUT-00 spec (m, u, t -> i, p -> a, s, c)
   if (Array.isArray(decoded.t)) {
     mint = decoded.m || DEFAULT_CASHU_MINT;
     for (const group of decoded.t) {
@@ -304,12 +304,12 @@ export function parseCashuToken(tokenString: string): DecodedCashuInfo {
       }
     }
   }
-  // Nhánh 2: Cấu trúc V4 chuẩn Object (mint, proofs, unit ở tầng root)
+  // Branch 2: V4 standard Object structure (mint, proofs, unit at root)
   else if (Array.isArray(decoded.proofs)) {
     mint = decoded.mint || DEFAULT_CASHU_MINT;
     proofs = decoded.proofs;
   }
-  // Nhánh 3: Cấu trúc V3 (decoded.token là mảng các entry chứa mint và proofs)
+  // Branch 3: V3 structure (decoded.token is an array of entries containing mint and proofs)
   else if (Array.isArray(decoded.token) && decoded.token.length > 0) {
     mint = decoded.token[0].mint || DEFAULT_CASHU_MINT;
     for (const entry of decoded.token) {
@@ -335,14 +335,14 @@ export function parseCashuToken(tokenString: string): DecodedCashuInfo {
 }
 
 /**
- * 2. Kiểm tra với Mint xem token còn giá trị hay đã bị rút (Có Timeout chống treo)
+ * 2. Verifies token validity with the Mint (with timeout to prevent hanging)
  */
 export async function verifyTokenWithMint(tokenString: string): Promise<{ isValid: boolean; reason?: string }> {
   try {
     const info = parseCashuToken(tokenString);
     const cleanMint = info.mint.replace(/\/+$/, "");
 
-    // Khởi tạo luồng kiểm tra với Mint
+    // Initiate verification check with Mint
     const verifyPromise = (async () => {
       try {
         const wallet = new Wallet(cleanMint);
@@ -377,7 +377,7 @@ export async function verifyTokenWithMint(tokenString: string): Promise<{ isVali
       return { isValid: true };
     })();
 
-    // Timeout 3 giây: Nếu server Mint phản hồi chậm sẽ tự động bỏ qua để UI không bị kẹt
+    // 3-second timeout: skip if Mint server responds slowly to avoid blocking UI
     const timeoutPromise = new Promise<{ isValid: boolean }>((resolve) =>
       setTimeout(() => resolve({ isValid: true }), 3000)
     );
@@ -389,7 +389,7 @@ export async function verifyTokenWithMint(tokenString: string): Promise<{ isVali
 }
 
 /**
- * 3. Tạo Lightning Invoice để Mint eCash theo Mint URL động
+ * 3. Creates a Lightning Invoice to mint eCash using dynamic Mint URL
  */
 export async function createCashuMintQuote(amountSats: number, mintUrl: string = DEFAULT_CASHU_MINT) {
   const cleanMint = mintUrl.trim().replace(/\/+$/, "");
@@ -402,7 +402,7 @@ export async function createCashuMintQuote(amountSats: number, mintUrl: string =
       } catch {}
     }
 
-    // 1. Thử gọi hàm chuẩn của Cashu-TS v4
+    // 1. Try standard Cashu-TS v4 method
     if (typeof (wallet as any).createMintQuoteBolt11 === "function") {
       try {
         const quote = await (wallet as any).createMintQuoteBolt11(amountSats);
@@ -414,7 +414,7 @@ export async function createCashuMintQuote(amountSats: number, mintUrl: string =
       } catch {}
     }
 
-    // 2. Thử gọi createMintQuote với tham số method: 'bolt11'
+    // 2. Try createMintQuote with method: 'bolt11'
     if (typeof (wallet as any).createMintQuote === "function") {
       try {
         const quote = await (wallet as any).createMintQuote("bolt11", amountSats);
@@ -438,7 +438,7 @@ export async function createCashuMintQuote(amountSats: number, mintUrl: string =
     console.warn("Wallet instance mint quote failed, attempting direct REST fallback:", walletErr);
   }
 
-  // 3. Fallback trực tiếp gọi REST API NUT-04 của Mint
+  // 3. Fallback to direct NUT-04 REST API call on the Mint
   try {
     const res = await fetch(`${cleanMint}/v1/mint/quote/bolt11`, {
       method: "POST",
@@ -464,7 +464,7 @@ export async function createCashuMintQuote(amountSats: number, mintUrl: string =
 }
 
 /**
- * 4. Chờ thanh toán và đúc thành chuỗi token cashu...
+ * 4. Polls payment status and claims minted cashu token string
  */
 export async function pollMintAndClaimToken(
   amountSats: number,
@@ -501,7 +501,7 @@ export async function pollMintAndClaimToken(
         return encodeCashuToken(cleanMint, proofs);
       }
     } catch {
-      // Chưa thanh toán xong, tiếp tục đợi
+      // Payment pending, continue polling
     }
     await new Promise((r) => setTimeout(r, 2000));
   }
@@ -510,7 +510,7 @@ export async function pollMintAndClaimToken(
 }
 
 /**
- * Hàm mã hóa Payload an toàn (NIP-44 / NIP-04)
+ * Encrypts payload securely via NIP-44 or NIP-04 fallback
  */
 async function encryptCashuPayload(
   recipientHexPubkey: string,
@@ -544,7 +544,7 @@ async function encryptCashuPayload(
 }
 
 /**
- * 5. Gửi Cashu NutZap (NIP-61) MÃ HÓA TOÀN PHẦN
+ * 5. Sends fully encrypted Cashu NutZap (NIP-61 Kind 9321)
  */
 export async function sendCashuNutZap({
   recipientPubkey,

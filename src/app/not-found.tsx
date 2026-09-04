@@ -48,7 +48,7 @@ export default function NotFound() {
           </p>
         </div>
 
-        {/* Ô Search tại trang 404 */}
+        {/* 404 Search bar */}
         <form
           onSubmit={handleSearch}
           className="bg-white p-3 rounded-3xl shadow-lg border border-slate-200/80 flex flex-col sm:flex-row items-center gap-3 max-w-lg mx-auto"
@@ -73,7 +73,7 @@ export default function NotFound() {
           </button>
         </form>
 
-        {/* Nút Điều hướng */}
+        {/* Navigation buttons */}
         <div className="pt-6 border-t border-slate-200/80 space-y-4">
           <div className="flex items-center justify-center gap-4 flex-wrap">
             <Link

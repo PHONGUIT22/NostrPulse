@@ -35,23 +35,23 @@ export default function LiveZapFeed({ pubkey, name }: Props) {
     let activeSockets = 0;
 
     const connectToDynamicRelays = async () => {
-      // 1. Kéo danh sách Relay NIP-65 riêng của Creator này
+      // 1. Fetch creator's NIP-65 relay list
       const creatorRelays = await fetchUserRelays(pubkey);
       
-      // 2. Lấy thêm Relay của User đang đăng nhập nếu có
+      // 2. Append logged-in user's relays if available
       let loggedUserRelays: string[] = [];
       try {
         const saved = localStorage.getItem("nostr_user_relays");
         if (saved) loggedUserRelays = JSON.parse(saved);
       } catch {}
 
-      // 3. Gộp và chọn lọc ra 4-6 Relay tối ưu nhất
+      // 3. Deduplicate and select optimal 4-6 relays
       const mergedList = mergeRelays([...creatorRelays, ...loggedUserRelays], DEFAULT_RELAYS).slice(0, 6);
       
       if (!isMounted) return;
       setTotalRelaysCount(mergedList.length);
 
-      // 4. Mở kết nối WebSocket tới từng Relay trong danh sách đã gộp
+      // 4. Open WebSocket connections to consolidated relays
       mergedList.forEach((relayUrl) => {
         try {
           const ws = new WebSocket(relayUrl);
@@ -200,7 +200,7 @@ export default function LiveZapFeed({ pubkey, name }: Props) {
           </div>
         </div>
 
-        {/* TRẠNG THÁI KẾT NỐI RELAY ĐỘNG */}
+        {/* Dynamic relay connection status */}
         <div className="flex items-center gap-2 bg-slate-950 px-3.5 py-1.5 rounded-full border border-slate-800 text-xs w-fit">
           <span className={`w-2 h-2 rounded-full ${
             connectedCount > 0 ? "bg-emerald-500 animate-ping" : "bg-amber-400 animate-pulse"
@@ -211,7 +211,7 @@ export default function LiveZapFeed({ pubkey, name }: Props) {
         </div>
       </div>
 
-      {/* DANH SÁCH ZAP FEED */}
+      {/* Zap feed list */}
       <div className="space-y-3">
         {zaps.length > 0 ? (
           zaps.map((item) => (
@@ -246,7 +246,7 @@ export default function LiveZapFeed({ pubkey, name }: Props) {
                 </div>
               </div>
 
-              {/* SỐ SATS ĐƯỢC ZAP */}
+              {/* Zapped sat amount */}
               <div className="text-right shrink-0 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl w-fit sm:w-auto">
                 <span className="font-black text-amber-400 text-sm flex items-center gap-1">
                   <Zap className="w-3.5 h-3.5 fill-amber-400" />

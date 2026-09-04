@@ -3,7 +3,7 @@ import { Zap, ShieldCheck, Award, ArrowUpRight, Sparkles } from "lucide-react";
 import { getLiveTopCreators } from "@/lib/creators";
 
 export default async function TopRankingGrid() {
-  // Lấy danh sách Featured Builders đã tuyển chọn
+  // Retrieve curated featured builders
   const creatorList = await getLiveTopCreators(10);
 
   const topZapped = creatorList.slice(0, 5);
@@ -15,7 +15,7 @@ export default async function TopRankingGrid() {
     <section className="py-16 bg-slate-50 border-y border-slate-200/60 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         
-        {/* TIÊU ĐỀ BẢNG XẾP HẠNG */}
+        {/* Leaderboard title */}
         <div className="text-center max-w-2xl mx-auto mb-12">
           <div className="inline-flex items-center gap-1.5 text-purple-600 font-bold text-xs uppercase tracking-wider mb-3 bg-purple-50 border border-purple-200 px-3.5 py-1 rounded-full shadow-xs">
             <Sparkles className="w-3.5 h-3.5" /> Curated Ecosystem Showcase
@@ -30,7 +30,7 @@ export default async function TopRankingGrid() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           
-          {/* CỘT 1: TOP ZAPPED BUILDERS */}
+          {/* Column 1: Top zapped builders */}
           <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-sm">
             <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
@@ -91,7 +91,7 @@ export default async function TopRankingGrid() {
             </div>
           </div>
 
-          {/* CỘT 2: ECOSYSTEM PIONEERS */}
+          {/* Column 2: Ecosystem pioneers */}
           <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-sm">
             <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
               <div className="flex items-center gap-3">

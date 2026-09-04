@@ -8,7 +8,7 @@ export default function Footer() {
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
           
-          {/* Cột 1: Thông tin Thương hiệu & Mô tả */}
+          {/* Column 1: Brand info and overview */}
         <Link href="/" className="flex items-center gap-2 text-xl font-bold text-white tracking-tight inline-block">
           <div className="w-6 h-6 bg-purple-600 rounded-lg flex items-center justify-center text-white text-xs font-black">⚡</div>
           <span>
@@ -19,7 +19,7 @@ export default function Footer() {
           NostrPulse is an analytics and discovery platform for the Nostr protocol, featuring real-time creator leaderboards, Lightning Zap tracking, and WebSocket relay telemetry.
         </p>
 
-          {/* Cột 2: Legal & Trust (Giữ nguyên chuẩn AdSense & E-E-A-T) */}
+          {/* Column 2: Legal & Trust (AdSense & E-E-A-T) */}
           <div>
             <h4 className="text-white font-semibold mb-4 text-xs uppercase tracking-wider">Legal & Trust</h4>
             <ul className="space-y-2.5 text-xs">
@@ -30,7 +30,7 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Cột 3: SEO Internal Links - Các vùng trọng điểm UK */}
+          {/* Column 3: Internal links & resources */}
           <div>
             <h4 className="text-white font-semibold mb-4 text-xs uppercase tracking-wider">Ecosystem</h4>
             <ul className="space-y-2.5 text-xs">
@@ -43,7 +43,7 @@ export default function Footer() {
 
         </div>
 
-        {/* BẮT BUỘC: DÒNG MIỄN TRỪ TRÁCH NHIỆM VÀ NGUỒN DỮ LIỆU UK */}
+        {/* Protocol disclaimer & data sources */}
         <div className="bg-slate-800/60 p-4 rounded-xl border border-slate-800 text-xs text-slate-400 mb-8 leading-relaxed flex items-start gap-3">
           <ShieldCheck className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
           <div>
@@ -51,7 +51,7 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* Bản quyền */}
+        {/* Copyright */}
         <div className="border-t border-slate-800 pt-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500">
           <p>© {new Date().getFullYear()}  NostrPulse. Open Source & Value-4-Value.</p>
           <p className="mt-2 sm:mt-0">Updated for 2026 Data Cycle</p>

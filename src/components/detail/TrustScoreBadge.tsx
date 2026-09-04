@@ -9,12 +9,12 @@ interface TrustScoreBadgeProps {
 }
 
 export default function TrustScoreBadge({ score, tier }: TrustScoreBadgeProps) {
-  // Tính toán chu vi vòng tròn SVG (Radius = 42 -> Chu vi ≈ 263.89)
+  // Calculate SVG circle circumference (Radius = 42 -> Circumference ≈ 263.89)
   const radius = 42;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (Math.min(Math.max(score, 5), 100) / 100) * circumference;
 
-  // Màu sắc động theo Tier
+  // Dynamic color theme based on tier
   const isHigh = score >= 80;
   const isMedium = score >= 50 && score < 80;
 
@@ -50,15 +50,15 @@ export default function TrustScoreBadge({ score, tier }: TrustScoreBadgeProps) {
 
   return (
     <div className="flex flex-col items-center justify-center p-5 rounded-3xl bg-slate-950 border border-slate-800 shadow-2xl relative overflow-hidden">
-      {/* HIỆU ỨNG ÁNH SÁNG NỀN (GLOW) */}
+      {/* Ambient background glow */}
       <div className={`absolute -top-10 -right-10 w-32 h-32 rounded-full blur-3xl opacity-20 ${
         isHigh ? "bg-emerald-500" : isMedium ? "bg-amber-500" : "bg-rose-500"
       }`} />
 
-      {/* VÒNG TRÒN TIẾN TRÌNH RADIAL SVG */}
+      {/* Radial SVG progress circle */}
       <div className="relative w-32 h-32 flex items-center justify-center">
         <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-          {/* Vòng nền xám */}
+          {/* Background track */}
           <circle
             cx="50"
             cy="50"
@@ -67,7 +67,7 @@ export default function TrustScoreBadge({ score, tier }: TrustScoreBadgeProps) {
             strokeWidth="8"
             fill="transparent"
           />
-          {/* Vòng sáng tiến trình điểm */}
+          {/* Active progress ring */}
           <circle
             cx="50"
             cy="50"
@@ -81,7 +81,7 @@ export default function TrustScoreBadge({ score, tier }: TrustScoreBadgeProps) {
           />
         </svg>
 
-        {/* ĐIỂM SỐ NẰM CHÍNH GIỮA */}
+        {/* Centered score value */}
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
           <span className="text-3xl font-black text-white tracking-tight leading-none">
             {score}
@@ -92,7 +92,7 @@ export default function TrustScoreBadge({ score, tier }: TrustScoreBadgeProps) {
         </div>
       </div>
 
-      {/* TIER BADGE DƯỚI ĐÁY */}
+      {/* Bottom tier badge */}
       <div className="mt-4 text-center space-y-1.5 w-full">
         <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-black shadow-lg ${colorScheme.bgBadge} ${colorScheme.glow}`}>
           {colorScheme.icon}

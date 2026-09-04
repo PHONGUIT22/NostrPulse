@@ -74,7 +74,7 @@ export default function LightningZapCard({
   // Tabs: Lightning vs Cashu
   const [activeTab, setActiveTab] = useState<"lightning" | "cashu">("lightning");
   
-  // Cashu sub-mode: "mint" (Nạp trực tiếp) vs "paste" (Dán mã có sẵn)
+  // Cashu sub-mode: "mint" (In-app minting) vs "paste" (Paste existing token)
   const [cashuMode, setCashuMode] = useState<"mint" | "paste">("mint");
 
   // Dynamic Cashu Mint Selector
@@ -103,7 +103,7 @@ export default function LightningZapCard({
   const cleanHandle = name.toLowerCase().replace(/[^a-z0-9_]/g, "") || "creator";
   const recipientPubkey = pubkey || npub;
 
-  // Khôi phục Mint đã lưu trong LocalStorage khi mount
+  // Restore saved Mint from LocalStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedMint = localStorage.getItem("nostrpulse_selected_mint");
@@ -117,7 +117,7 @@ export default function LightningZapCard({
     }
   }, []);
 
-  // Cập nhật và lưu Mint đã chọn
+  // Update and persist selected Mint
   const handleMintChange = (url: string) => {
     setSelectedMintUrl(url);
     if (typeof window !== "undefined") {
@@ -266,7 +266,7 @@ export default function LightningZapCard({
   };
 
   // ----------------------------------------------------
-  // 2. CASHU: 1-CLICK IN-APP MINTING (Đúc eCash trực tiếp)
+  // 2. CASHU: 1-Click in-app minting
   // ----------------------------------------------------
   const handleInAppMintAndSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -281,12 +281,12 @@ export default function LightningZapCard({
         ? customMintUrl.trim()
         : selectedMintUrl;
 
-      // 1. Tạo Lightning Invoice từ Mint đã chọn
+      // 1. Generate Lightning Invoice from selected Mint
       const { invoice, quoteId, mintUrl } = await createCashuMintQuote(sats, activeMint);
       
       setInvoicePr(invoice);
 
-      // 2. Mở WebLN hoặc hiện QR cho User thanh toán
+      // 2. Trigger WebLN or display QR for payment
       if (typeof window !== "undefined" && (window as any).webln) {
         try {
           const webln = (window as any).webln;
@@ -302,13 +302,13 @@ export default function LightningZapCard({
 
       setStatusMessage("⏳ Awaiting Lightning invoice payment (Scan QR or approve in wallet)...");
 
-      // 3. Polling Mint để nhận token đã đúc
+      // 3. Poll Mint to claim minted tokens
       const mintedToken = await pollMintAndClaimToken(sats, quoteId, mintUrl);
 
       setIsQrOpen(false);
       setStatusMessage("🔒 Encrypting NutZap and broadcasting to Nostr...");
 
-      // 4. Mã hóa NIP-44 và phát tán NutZap tới Creator
+      // 4. Encrypt via NIP-44 and broadcast NutZap to relays
       await sendCashuNutZap({
         recipientPubkey,
         cashuToken: mintedToken,
@@ -330,7 +330,7 @@ export default function LightningZapCard({
   };
 
   // ----------------------------------------------------
-  // 3. CASHU: DÁN MÃ CÓ SẴN (PASTE TOKEN)
+  // 3. CASHU: Paste existing token
   // ----------------------------------------------------
   const handleVerifyCashuToken = async () => {
     if (!cashuTokenInput.trim()) return;

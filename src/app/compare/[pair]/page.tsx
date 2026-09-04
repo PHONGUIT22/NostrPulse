@@ -13,7 +13,7 @@ interface PageProps {
   params: Promise<{ pair: string }> | { pair: string };
 }
 
-// Helper tách 2 npub từ slug
+// Helper to parse two npubs from slug
 function parsePairSlug(pairSlug: string) {
   const parts = pairSlug.split("-vs-");
   if (parts.length !== 2) return null;
@@ -26,7 +26,7 @@ function parsePairSlug(pairSlug: string) {
   return { npubA, npubB };
 }
 
-// 1. TỰ ĐỘNG SINH METADATA SEO
+// 1. Dynamic SEO metadata generator
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const resolvedParams = await params;
   const parsed = parsePairSlug(resolvedParams.pair);
@@ -47,20 +47,20 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-// 2. MAIN COMPONENT (CHỐNG LỖI 404 TUYỆT ĐỐI)
+// 2. Main comparison component
 export default async function CompareDetailPage({ params }: PageProps) {
   const resolvedParams = await params;
   const parsed = parsePairSlug(resolvedParams.pair);
 
   if (!parsed) return notFound();
 
-  // Kéo profile 2 bên song song
+  // Fetch both profiles in parallel
   const [rawA, rawB] = await Promise.all([
     fetchNostrProfile(parsed.npubA),
     fetchNostrProfile(parsed.npubB),
   ]);
 
-  // 🔥 TỰ ĐỘNG BÙ ĐẮP DATA NẾU MẠNG CHẬM (KHÔNG BAO GIỜ BỊ 404) 🔥
+  // Fallback data resolution for network delays
   const dataA: NostrProfile = rawA || {
     pubkey: parsed.npubA,
     npub: parsed.npubA,
@@ -133,10 +133,10 @@ export default async function CompareDetailPage({ params }: PageProps) {
           </div>
         </article>
 
-        {/* BẢNG SO SÁNH ĐỐI ĐẦU */}
+        {/* Head-to-head comparison table */}
         <VersusTable dataA={{ ...dataA, npub: parsed.npubA }} dataB={{ ...dataB, npub: parsed.npubB }} />
 
-        {/* CTA XEM PROFILE TRỰC TIẾP */}
+        {/* Direct profile links CTA */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
           <Link
             href={`/p/${parsed.npubA}`}

@@ -13,7 +13,7 @@ export async function GET(
   const rawNpub = decodeURIComponent(resolvedParams.npub);
   const { hex: hexPubkey, npub: encodedNpub } = normalizeToHex(rawNpub);
 
-  // Kéo dữ liệu profile
+  // Fetch profile data
   const rawProfile = await fetchNostrProfile(rawNpub);
   const profile: NostrProfile = rawProfile || {
     pubkey: hexPubkey,
@@ -21,7 +21,7 @@ export async function GET(
     created_at: Math.floor(Date.now() / 1000),
   };
 
-  // Xác thực NIP-05 & Tính Trust Score
+  // Verify NIP-05 & calculate Trust Score
   const nip05Result = await verifyNip05(profile.nip05, profile.pubkey);
   const trustData = calculateTrustScore(profile, nip05Result);
 
@@ -37,7 +37,7 @@ export async function GET(
     tierLabel = "CONTRIBUTOR";
   }
 
-  // Template SVG Badge chuẩn GitHub Shields.io (Kích thước chuẩn, hiển thị siêu nét)
+  // GitHub Shields.io style SVG badge template
   const svg = `
   <svg xmlns="http://www.w3.org/2000/svg" width="195" height="28" viewBox="0 0 195 28">
     <linearGradient id="b" x2="0" y2="100%">

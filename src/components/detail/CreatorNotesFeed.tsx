@@ -9,7 +9,7 @@ interface CreatorNotesFeedProps {
   creatorName?: string;
 }
 
-// Hàm format thời gian tương đối (vd: 5 phút trước, 2 giờ trước)
+// Relative time formatting helper (e.g. 5m ago, 2h ago)
 function formatTimeAgo(timestamp: number): string {
   const now = Math.floor(Date.now() / 1000);
   const diff = Math.max(1, now - timestamp);

@@ -25,7 +25,7 @@ export interface TrustScoreResult {
   breakdown: TrustScoreBreakdownItem[];
 }
 
-// Danh sách các Core Seed Key uy tín trong mạng lưới Nostr dùng để tính điểm Web-of-Trust (WoT)
+// Trusted core seed keys in Nostr network used for Web-of-Trust (WoT) scoring
 const REPUTABLE_SEED_PUBKEYS = new Set([
   "82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a04f9d61825e81d02", // jack
   "3bf0c63fcb93463407af97b5e0907d743715840c6ee7abbd2e1070d12194e322", // fiatjaf
@@ -39,7 +39,7 @@ export function calculateTrustScore(
   profile: NostrProfile | null,
   nip05Result?: Nip05Result
 ): TrustScoreResult {
-  // 1. Phân giải NIP-05
+  // 1. Resolve NIP-05 identifier
   const resolvedNip05: Nip05Result = nip05Result || {
     isVerified: Boolean(profile?.nip05 && profile.nip05.includes("@")),
     nip05: profile?.nip05 || "",
@@ -65,13 +65,13 @@ export function calculateTrustScore(
   const breakdown: TrustScoreBreakdownItem[] = [];
 
   // =========================================================================
-  // PILLAR 1: NIP-05 Cryptographic DNS Verification (Max: 25 Điểm)
+  // Pillar 1: NIP-05 Cryptographic DNS Verification (Max: 25 pts)
   // =========================================================================
   const isNip05Verified = resolvedNip05.isVerified;
   let nip05Points = 0;
 
   if (isNip05Verified) {
-    // Thưởng thêm điểm nếu dùng Domain riêng thay vì public gateway miễn phí
+    // Bonus points for custom domain instead of free public gateways
     const isCustomDomain = resolvedNip05.domain && !["nostrcheck.me", "nostrplebs.com", "iris.to"].includes(resolvedNip05.domain);
     nip05Points = isCustomDomain ? 25 : 22;
   }
@@ -92,7 +92,7 @@ export function calculateTrustScore(
   });
 
   // =========================================================================
-  // PILLAR 2: Web-of-Trust (WoT) & Graph Connectivity (Max: 25 Điểm)
+  // Pillar 2: Web-of-Trust (WoT) & Graph Connectivity (Max: 25 pts)
   // =========================================================================
   let wotPoints = 0;
   const isSeedKey = profile.pubkey && REPUTABLE_SEED_PUBKEYS.has(profile.pubkey.toLowerCase());
@@ -102,7 +102,7 @@ export function calculateTrustScore(
   } else if ((profile as any).wot_score && typeof (profile as any).wot_score === "number") {
     wotPoints = Math.min(25, Math.round(((profile as any).wot_score / 100) * 25));
   } else {
-    // Đánh giá dựa trên tỷ lệ mạng lưới (Social Graph Heuristics)
+    // Evaluated based on social graph heuristics
     const followers = (profile as any).followers_count || 0;
     const following = (profile as any).following_count || 0;
 
@@ -133,7 +133,7 @@ export function calculateTrustScore(
   });
 
   // =========================================================================
-  // PILLAR 3: Lightning Value-4-Value Payment Endpoint (Max: 20 Điểm)
+  // Pillar 3: Lightning Value-4-Value Payment Endpoint (Max: 20 pts)
   // =========================================================================
   const hasLud16 = Boolean(profile.lud16 && profile.lud16.includes("@"));
   const lud16Points = hasLud16 ? 20 : 0;
@@ -152,7 +152,7 @@ export function calculateTrustScore(
   });
 
   // =========================================================================
-  // PILLAR 4: Network Longevity & Relay Synchronization (Max: 15 Điểm)
+  // Pillar 4: Network Longevity & Relay Synchronization (Max: 15 pts)
   // =========================================================================
   const now = Math.floor(Date.now() / 1000);
   const accountAgeSeconds = profile.created_at ? now - profile.created_at : 0;
@@ -183,7 +183,7 @@ export function calculateTrustScore(
   });
 
   // =========================================================================
-  // PILLAR 5: Profile Metadata Richness & Consistency (Max: 15 Điểm)
+  // Pillar 5: Profile Metadata Richness & Consistency (Max: 15 pts)
   // =========================================================================
   let metaPoints = 0;
   if (profile.picture && profile.picture.startsWith("http")) metaPoints += 5;
@@ -206,8 +206,8 @@ export function calculateTrustScore(
   // =========================================================================
   // ANTI-SYBIL GUARD (Damping Factor)
   // =========================================================================
-  // Nếu KHÔNG CÓ xác thực NIP-05 Cryptographic VÀ WoT = 0, giới hạn điểm tối đa là 44.
-  // Tránh việc spammer tự tạo profile đẹp để ăn trọn điểm metadata.
+  // Cap score at 44 if lacking both NIP-05 verification and WoT graph connectivity.
+  // Prevents spammers from gaming metadata scores.
   let finalScore = rawScore;
   let isSybilDamped = false;
 
@@ -218,7 +218,7 @@ export function calculateTrustScore(
     }
   }
 
-  // Phân loại Tier
+  // Tier classification
   let tier: TrustScoreResult["tier"] = "Unverified / Potential Bot";
   let tierColor = "text-rose-400";
   let tierBg = "bg-rose-950/40";

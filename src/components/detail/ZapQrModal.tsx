@@ -35,7 +35,7 @@ export default function ZapQrModal({
   const [copied, setCopied] = useState(false);
   const [showTelemetry, setShowTelemetry] = useState(false);
 
-  // Đóng modal khi bấm phím ESC và khóa cuộn trang nền
+  // Close modal on Escape key and lock background scrolling
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -65,17 +65,17 @@ export default function ZapQrModal({
   };
 
   return (
-    // BACKDROP: z-[9999] đè lên mọi Navbar, căn giữa an toàn
+    // Backdrop: top-level z-index with centered placement
     <div 
       className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-150"
       onClick={onClose}
     >
-      {/* MODAL CARD: flex flex-col với max-h an toàn */}
+      {/* Modal card: flex-col with max-h guard */}
       <div 
         className="relative w-full max-w-sm sm:max-w-md bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] my-auto animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 🔥 HEADER CỐ ĐỊNH (SHRINK-0) - KHÔNG BAO GIỜ BỊ CHE NÚT X 🔥 */}
+        {/* Fixed header bar with dismiss button */}
         <div className="shrink-0 px-4 sm:px-5 py-3 sm:py-3.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between z-10">
           <div className="flex items-center gap-2.5 min-w-0 pr-2">
             <div className="w-7 h-7 sm:w-8 sm:h-8 bg-amber-500/20 border border-amber-500/30 rounded-xl flex items-center justify-center text-amber-400 shrink-0">
@@ -91,7 +91,7 @@ export default function ZapQrModal({
             </div>
           </div>
 
-          {/* NÚT ĐÓNG X NỔI BẬT DỄ BẤM */}
+          {/* Dismiss button */}
           <button
             type="button"
             onClick={onClose}
@@ -102,10 +102,10 @@ export default function ZapQrModal({
           </button>
         </div>
 
-        {/* NỘI DUNG CUỘN ĐƯỢC (SCROLLABLE BODY) */}
+        {/* Scrollable body content */}
         <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
           
-          {/* KHỐI QR CODE SVG */}
+          {/* QR Code SVG container */}
           <div className="flex flex-col items-center justify-center">
             <div className="p-2.5 sm:p-3 bg-white rounded-2xl shadow-xl border-4 border-amber-400/20">
               <QRCodeSVG
@@ -121,7 +121,7 @@ export default function ZapQrModal({
             </p>
           </div>
 
-          {/* CÁC NÚT TIỆN ÍCH */}
+          {/* Action utility buttons */}
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -146,7 +146,7 @@ export default function ZapQrModal({
             </button>
           </div>
 
-          {/* Ô CHUỖI INVOICE (LNBC...) CÓ GIỚI HẠN CHIỀU CAO */}
+          {/* Truncated invoice payload (lnbc...) container */}
           <div className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 text-[10px] font-mono text-slate-400 break-all select-all max-h-24 overflow-y-auto">
             <span className="text-slate-500 block text-[9px] uppercase font-bold mb-0.5 sticky top-0 bg-slate-950">
               Payment Request (pr):

@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// 26 npub thật đã cào được
+// Curated seed npubs
 const RAW_NPUBS = [
   "npub1xtscya34g58tk0z605fvr788k263gsu6cy9x0mhnm87echrgufzsevkk5s",
   "npub1sg6plzptd64u62a878hep2kev88swjh3tw00gjsfl8f237lmu63q0uf63m",
@@ -40,7 +40,7 @@ const RELAYS = [
   "wss://relay.nostr.band"
 ];
 
-// Hàm kiểm tra endpoint Lightning (lud16) có trả về callback thật không
+// Verifies if Lightning endpoint (lud16) returns a valid callback
 async function verifyLightningAddress(lud16) {
   if (!lud16 || !lud16.includes("@")) return "";
   const [user, domain] = lud16.split("@");
@@ -74,7 +74,7 @@ async function run() {
     } catch {}
   }
 
-  // Kéo toàn bộ sự kiện Kind 0 từ các tác giả này
+  // Query Kind 0 metadata events for all target authors
   const events = await pool.querySync(RELAYS, {
     kinds: [0],
     authors: hexKeys
@@ -82,7 +82,7 @@ async function run() {
 
   console.log(` Nhận được ${events.length} metadata events từ mạng lưới.`);
 
-  // Lọc lấy event mới nhất cho từng pubkey (theo created_at)
+  // Deduplicate and retain latest event per pubkey (by created_at)
   const latestEvents = new Map();
   for (const ev of events) {
     const existing = latestEvents.get(ev.pubkey);

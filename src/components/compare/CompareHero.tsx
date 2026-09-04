@@ -57,7 +57,7 @@ export default function CompareHero({ locA, locB }: Props) {
           Compare NIP-05 verification, Lightning Zaps capability, metadata setups, and protocol identity between two Nostr users.
         </p>
 
-        {/* 2 Ô NHẬP NPUB + NÚT SWAP */}
+        {/* Dual npub inputs & swap button */}
         <form onSubmit={handleCompare} className="max-w-3xl mx-auto bg-slate-800/90 p-4 rounded-3xl border border-slate-700 shadow-xl flex flex-col md:flex-row items-center gap-3">
           
           <div className="relative w-full">

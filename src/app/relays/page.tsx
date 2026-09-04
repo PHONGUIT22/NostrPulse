@@ -48,7 +48,7 @@ export default function RelaysDirectoryPage() {
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
-  // 🔥 HÀM ĐO PING THẬT QUA WEBSOCKET BROWSER 🔥
+  // WebSocket ping latency measurement
   const pingAllRelays = () => {
     setIsRefreshing(true);
 
@@ -249,7 +249,7 @@ export default function RelaysDirectoryPage() {
                         </span>
                       </div>
 
-                      {/* Hiển thị Ping thật */}
+                      {/* Live ping display */}
                       {relay.status === "online" && relay.ping !== null ? (
                         <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-md shrink-0">
                           {relay.ping}ms
@@ -297,7 +297,7 @@ export default function RelaysDirectoryPage() {
           </div>
         </div>
 
-        {/* HƯỚNG DẪN */}
+        {/* Documentation & guide */}
         <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-wider mb-2">
